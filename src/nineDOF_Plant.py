@@ -332,10 +332,12 @@ class plant:
                       control_func=None) -> Tuple[np.ndarray, np.ndarray]:
 
         n_steps = int(t_final / dt) + 1
-        times = np.linspace(0, t_final, n_steps)
-        states = np.zeros((n_steps, 18))
+        times = []
+        states = []
         
-        states[0] = state0.copy()
+        state = state0.copy()
+        times.append(0.0)
+        states.append(state)
         
         for i in range(1, n_steps):
             t = times[i-1]
@@ -350,13 +352,19 @@ class plant:
                 incidence = 0.0
             
             #Integrate
-            states[i] = self.rk4_step(states[i-1], dt, deltaL, deltaR, incidence)
+            state = self.rk4_step(states[i-1], dt, deltaL, deltaR, incidence)
             
             #Angle wrapping
             for angle_idx in [4, 5, 7, 8]:  #theta and psi for both bodies
-                while states[i, angle_idx] > np.pi:
-                    states[i, angle_idx] -= 2*np.pi
-                while states[i, angle_idx] < -np.pi:
-                    states[i, angle_idx] += 2*np.pi
+                while state[angle_idx] > np.pi:
+                    state[angle_idx] -= 2*np.pi
+                while state[angle_idx] < -np.pi:
+                    state[angle_idx] += 2*np.pi
+            
+            times.append(t + dt)
+            states.append(state.copy())
+            
+            if state[2] >= 0.0:
+                break
         
-        return times, states
+        return np.array(times), np.array(states)
