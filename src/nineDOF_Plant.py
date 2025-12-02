@@ -1,11 +1,10 @@
 #nineDOF_Plant.py
 import numpy as np
-import matplotlib.pyplot as plt
 from typing import Tuple
 
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
-from nineDOF_Control import baseController, make_control_function
+from nineDOF_Control import testController, make_control_function
 
 class plant:
 
@@ -15,8 +14,6 @@ class plant:
 
         #Populate Mass and Inertia Tensors
         self.populateInertias()
-
-        #
 
     def populateInertias(self):
         p = self.parameters
@@ -48,7 +45,7 @@ class plant:
             [0.0, 0.0, 0.0]
         ])
     
-    def transformFromInertialtoBody(self, phi: float, theta: float, psi: float) -> np.ndarray:
+    def makeTransform_IntertialToBody(self, phi: float, theta: float, psi: float) -> np.ndarray:
         cphi, sphi = np.cos(phi), np.sin(phi)
         ctheta, stheta = np.cos(theta), np.sin(theta)
         cpsi, spsi = np.cos(psi), np.sin(psi)
@@ -89,7 +86,7 @@ class plant:
             [-v[1], v[0], 0]
         ])
     
-    def _interpolate_aero_tables(self, sig1: float) -> Tuple[float, float, float, float]:
+    def interpolateAeroTables(self, sig1: float) -> Tuple[float, float, float, float]:
         """Interpolate CD0, CDA2, CL0, CLA from sig1 table"""
         p = self.parameters
         
@@ -112,7 +109,7 @@ class plant:
         
         return cd0, cda2, cl0, cla
     
-    def _interpolate_cnd2(self, alpha: float) -> float:
+    def interpolateCND2(self, alpha: float) -> float:
         """Interpolate CND2 from AOA table"""
         p = self.parameters
         
@@ -139,8 +136,8 @@ class plant:
         pC, qC, rC = state[15:18]
 
         #Transformation Matrices
-        T_IP = self.transformFromInertialtoBody(phiP, thetaP, psiP)
-        T_IC = self.transformFromInertialtoBody(phiC, thetaC, psiC)
+        T_IP = self.makeTransform_IntertialToBody(phiP, thetaP, psiP)
+        T_IC = self.makeTransform_IntertialToBody(phiC, thetaC, psiC)
         T_PC = T_IP.T @ T_IC
 
         #Velocities of Gimbal in parafoil frame
@@ -189,8 +186,8 @@ class plant:
         sig1 = dS / p.dbar
 
         #Interpolate Aerodynamic Coefficients
-        CD0, CDA2, CL0, CLA = self._interpolate_aero_tables(sig1)
-        CND2 = self._interpolate_cnd2(alpha)
+        CD0, CDA2, CL0, CLA = self.interpolateAeroTables(sig1)
+        CND2 = self.interpolateCND2(alpha)
 
         #Normalized Independent Controls
         sigmaLeft = deltaL / p.dbar
@@ -249,8 +246,8 @@ class plant:
         S_wC_C = self.skew(wC_C)
 
         #Creating Transformation Matrices
-        T_IP = self.transformFromInertialtoBody(phiP, thetaP, psiP)
-        T_IC = self.transformFromInertialtoBody(phiC, thetaC, psiC)
+        T_IP = self.makeTransform_IntertialToBody(phiP, thetaP, psiP)
+        T_IC = self.makeTransform_IntertialToBody(phiC, thetaC, psiC)
         T_CP = T_IC.T @ T_IP
         T_PPI = self.makeT_PPI(incidence, p.NOM_INCIDENCE)
         T_parafoilJ = self.makeJ(phiP, thetaP, psiP)
@@ -367,7 +364,7 @@ class plant:
         for i in range(1, n_steps):
             t = times[i-1]
             
-            # Get control inputs
+            #Get control inputs
             if control_func is not None:
                 deltaL, deltaR, incidence = control_func(t, states[i-1])
             else:
@@ -376,11 +373,11 @@ class plant:
                 deltaR = 0.0
                 incidence = 0.0
             
-            # Integrate
+            #Integrate
             states[i] = self.rk4_step(states[i-1], dt, deltaL, deltaR, incidence)
             
-            # Angle wrapping
-            for angle_idx in [4, 5, 7, 8]:  # theta and psi for both bodies
+            #Angle wrapping
+            for angle_idx in [4, 5, 7, 8]:  #theta and psi for both bodies
                 while states[i, angle_idx] > np.pi:
                     states[i, angle_idx] -= 2*np.pi
                 while states[i, angle_idx] < -np.pi:
@@ -389,27 +386,27 @@ class plant:
         return times, states
 
 if __name__ == "__main__":
-    # Create parameters from input file
+    #Create parameters from input file
     params = systemParameters()
     atm = atmosphereParameters()
     
-    # Create simulator
+    #Create simulator
     sim = plant(params, atm)
     
-    # Initial state: hovering at origin with small perturbation
+    #Initial state: hovering at origin with small perturbation
     state0 = np.zeros(18)
     state0[0:3] = [0.0, 0.0, -100.0]  # Position: 100m altitude
     state0[3:6] = [0.0, 0.1, 0.0]     # Parafoil angles: small pitch
     state0[6:9] = [0.0, 0.1, 0.0]     # Cradle angles: small pitch
     state0[9:12] = [10.0, 0.0, -0.5]  # Forward velocity
     
-    # Run simulation
+    #Run simulation
     print("Running parafoil-payload simulation...")
     t_final = 50.0  # seconds
     dt = 0.1        # seconds
     
     #Creating Control Function
-    control = make_control_function(baseController())
+    control = make_control_function(testController())
 
     times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
     

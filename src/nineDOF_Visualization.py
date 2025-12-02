@@ -5,14 +5,6 @@ import matplotlib.animation as ani
 
 class visualizeData:
     def plot_trajectory(history, title="Parafoil Trajectory"):
-        """
-        Plots the 3D trajectory of the system.
-        
-        Args:
-            history: numpy array of shape (N, 18) containing state vectors.
-                    Assumes columns 0, 1, 2 are x, y, z (NED).
-            title:   String title for the plot.
-        """
         # Extract positions
         # NED Coordinates: x=North, y=East, z=Down
         north = history[:, 0]
@@ -39,8 +31,6 @@ class visualizeData:
         ax.set_title(title)
         
         # Force equal aspect ratio implies simpler interpretation of distance
-        # (Matplotlib 3D doesn't strictly support 'equal' aspect easily, 
-        # but we can approximate by setting limits)
         max_range = np.array([east.max()-east.min(), north.max()-north.min(), altitude.max()-altitude.min()]).max() / 2.0
         mid_x = (east.max()+east.min()) * 0.5
         mid_y = (north.max()+north.min()) * 0.5
