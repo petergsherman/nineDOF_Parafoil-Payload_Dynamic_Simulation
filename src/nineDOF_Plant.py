@@ -3,8 +3,7 @@ import numpy as np
 from typing import Tuple
 
 from nineDOF_Parameters import systemParameters, atmosphereParameters
-from nineDOF_Visualization import visualizeData
-from nineDOF_Control import testController, make_control_function
+from nineDOF_Transform import makeJ, makeTransform_IntertialToBody
 
 class plant:
 
@@ -44,29 +43,6 @@ class plant:
             [p.PMASSH, 0.0, 0.0],
             [0.0, 0.0, 0.0]
         ])
-    
-    def makeTransform_IntertialToBody(self, phi: float, theta: float, psi: float) -> np.ndarray:
-        cphi, sphi = np.cos(phi), np.sin(phi)
-        ctheta, stheta = np.cos(theta), np.sin(theta)
-        cpsi, spsi = np.cos(psi), np.sin(psi)
-        
-        T = np.array([
-            [ctheta*cpsi, sphi*stheta*cpsi - cphi*spsi, cphi*stheta*cpsi + sphi*spsi],
-            [ctheta*spsi, sphi*stheta*spsi + cphi*cpsi, cphi*stheta*spsi - sphi*cpsi],
-            [-stheta, sphi*ctheta, cphi*ctheta]
-        ])
-
-        return T
-    
-    def makeJ(self, phi, theta, psi): #Euler-rate Jacobian Tensor
-        c_phi = np.cos(phi)
-        c_theta = np.cos(theta)
-        s_phi = np.sin(phi)
-        t_theta = np.tan(theta)
-
-        return np.array([[1,  s_phi * t_theta,     c_phi * t_theta],
-                         [0,  c_phi,               -s_phi],
-                         [0,  s_phi / c_theta,     c_phi / c_theta]])
     
     def makeT_PPI(self, incidence, nominalIncidence):
         
@@ -136,8 +112,8 @@ class plant:
         pC, qC, rC = state[15:18]
 
         #Transformation Matrices
-        T_IP = self.makeTransform_IntertialToBody(phiP, thetaP, psiP)
-        T_IC = self.makeTransform_IntertialToBody(phiC, thetaC, psiC)
+        T_IP = makeTransform_IntertialToBody(phiP, thetaP, psiP)
+        T_IC = makeTransform_IntertialToBody(phiC, thetaC, psiC)
         T_PC = T_IP.T @ T_IC
 
         #Velocities of Gimbal in parafoil frame
@@ -246,12 +222,12 @@ class plant:
         S_wC_C = self.skew(wC_C)
 
         #Creating Transformation Matrices
-        T_IP = self.makeTransform_IntertialToBody(phiP, thetaP, psiP)
-        T_IC = self.makeTransform_IntertialToBody(phiC, thetaC, psiC)
+        T_IP = makeTransform_IntertialToBody(phiP, thetaP, psiP)
+        T_IC = makeTransform_IntertialToBody(phiC, thetaC, psiC)
         T_CP = T_IC.T @ T_IP
         T_PPI = self.makeT_PPI(incidence, p.NOM_INCIDENCE)
-        T_parafoilJ = self.makeJ(phiP, thetaP, psiP)
-        T_bodyJ = self.makeJ(phiC, thetaC, psiC)
+        T_parafoilJ = makeJ(phiP, thetaP, psiP)
+        T_bodyJ = makeJ(phiC, thetaC, psiC)
 
         #Updating Non-coupled Linear Statedot Terms
         statedot[0:3] = T_IP @ vG_P
