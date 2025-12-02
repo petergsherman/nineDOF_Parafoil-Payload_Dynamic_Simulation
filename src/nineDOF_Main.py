@@ -1,7 +1,7 @@
 #nineDOF_Main.py
 import numpy as np
 from nineDOF_Plant import plant
-from nineDOF_Control import testController, make_control_function
+from nineDOF_Control import simpleHeadingController, testController, make_control_function
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
 
@@ -24,9 +24,10 @@ state0[9:12] = [10.0, 0.0, -0.5]  # Forward velocity
 print("Running parafoil-payload simulation...")
 t_final = 50.0  # seconds
 dt = 0.1        # seconds
+targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(testController())
+control = make_control_function(simpleHeadingController(targetLandingPoint))
 
 times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
     
