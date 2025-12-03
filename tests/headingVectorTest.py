@@ -4,7 +4,7 @@ import matplotlib.animation as animation
 import pandas as pd
 
 # Read CSV file
-csv_file = 'vectors.csv'  # Change this to your CSV filename
+csv_file = 'GeometricControl.csv'  # Change this to your CSV filename
 data = pd.read_csv(csv_file)
 
 # Assuming CSV columns are: v1_x, v1_y, v2_x, v2_y
