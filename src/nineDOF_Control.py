@@ -11,9 +11,9 @@ class testController:
     def computeControl(self, state):
         altitude = -state[2]  # Convert to positive altitude
         
-        if altitude > 60:
+        if altitude > 250:
             return (0.0, 0.0, 0.0)
-        elif altitude < 60:
+        elif altitude < 250:
             return (0.0, 0.9, 0.0)
         else:
             return (0.0, 0.0, 0.0)
@@ -33,19 +33,21 @@ class simpleHeadingController:
             return (np.clip(deltaL, 0, 0.9), np.clip(deltaR, 0, 0.9), 0)
 
     def computeControl(self, state):
-        T_IP = makeTransform_IntertialToBody(state[3], state[4], state[5]) #Transformation from Inertial to Parafoil Frame
-
         #Calculating Parafoil Heading Unit Vector 
-        heading_P = np.array([state[9], state[10], 0]) / np.linalg.norm(np.array([state[9], state[10], 0])) 
-        heading_I = T_IP.T @ heading_P #Parafoil to Inertial
+        heading_I = np.array([np.cos(state[5]), np.sin(state[5])])
 
         #Calculating Inertial Heading Unit Vector
-        headingTarget_I = np.array([self.target[0] - state[0], self.target[1] - state[1], 0]) / np.linalg.norm(np.array([self.target[0] - state[0], self.target[1] - state[1], 0]))
+        headingTarget_I = np.array([self.target[0] - state[0], self.target[1] - state[1]]) / np.linalg.norm(np.array([self.target[0] - state[0], self.target[1] - state[1]]))
         
         #Computing Cross Product of Heading and Target Heading
         cross = np.cross(heading_I[0:2], headingTarget_I[0:2])
+        print(heading_I[0], heading_I[1], headingTarget_I[0], headingTarget_I[1], sep=', ')
+
+        if cross > 0:
+            return (0, np.abs(cross), 0) #Right Break Control
+        elif cross < 0:
+            return (np.abs(cross), 0, 0) #Left Break Control
         
-        return self.asymmetric_to_brakes(cross, 0.5)
         
 def make_control_function(controller):
     """
