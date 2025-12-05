@@ -1,0 +1,43 @@
+# Core LaTeX build files
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+
+# Intermediate documents
+*.dvi
+*.xdv
+*.pdfsync
+
+# Bibliography
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+
+# SyncTeX
+*.synctex.gz
+*.synctex.gz(busy)
+
+# Latexmk
+*.fdb_latexmk
+*.fls
+
+# minted package
+_minted*
+*.pyg
+
+# Editors
+*.swp
+*.swo
+*.bak
+
+# Output PDF (OPTIONAL — remove this line if you want to commit PDF)
+#*.pdf
