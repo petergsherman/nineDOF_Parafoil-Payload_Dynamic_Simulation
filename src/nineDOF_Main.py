@@ -4,25 +4,26 @@ from nineDOF_Plant import plant
 from nineDOF_Control import simpleHeadingController, testController, make_control_function
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
+from nineDOF_Atmosphere import dynamicAtmosphere, staticAtmosphere
 
 
 #Create parameters from input file
 params = systemParameters()
-atm = atmosphereParameters()
+atm = staticAtmosphere()
     
 #Create simulator
 sim = plant(params, atm)
     
 #Initial state: hovering at origin with small perturbation
 state0 = np.zeros(18)
-state0[0:3] = [0.0, 0.0, -100.0]  # Position: 100m altitude
+state0[0:3] = [0.0, 0.0, -1000.0]  # Position: 100m altitude
 state0[3:6] = [0.0, 0.1, 0.0]     # Parafoil angles: small pitch
 state0[6:9] = [0.0, 0.1, 0.0]     # Cradle angles: small pitch
 state0[9:12] = [10.0, 0.0, -0.5]  # Forward velocity
     
 #Run simulation
 print("Running parafoil-payload simulation...")
-t_final = 15.0  # seconds
+t_final = 1000.0  # seconds
 dt = 0.1        # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     

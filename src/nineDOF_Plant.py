@@ -342,6 +342,11 @@ class plant:
         for i in range(1, n_steps):
             t = times[i-1]
             
+            # Update atmosphere (assuming z is state[2], positive down)
+            if hasattr(self.atmosphere, "update"):
+                altitude = -states[i - 1][2]
+                self.atmosphere.update(t, altitude)
+
             #Get control inputs
             if control_func is not None:
                 deltaL, deltaR, incidence = control_func(t, states[i-1])
