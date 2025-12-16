@@ -28,7 +28,7 @@ dt = 0.1        # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(simpleHeadingController(targetLandingPoint))
+control = make_control_function(testController())
 
 times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
     

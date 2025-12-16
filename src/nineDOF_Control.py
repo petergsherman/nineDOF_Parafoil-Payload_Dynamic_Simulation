@@ -9,11 +9,11 @@ class testController:
 
     def computeControl(self, state):
         altitude = -state[2]  # Convert to positive altitude
-        
+        print (state[0], state[1], state[2], sep=", ")
         if altitude > 250:
             return (0.0, 0.0, 0.0)
         elif altitude < 250:
-            return (0.0, 0.9, 0.0)
+            return (0.9, 0.0, 0.0)
         else:
             return (0.0, 0.0, 0.0)
 

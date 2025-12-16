@@ -1,1 +1,2 @@
 # nineDOF_Parafoil-Payload_Dynamic_Simulation
+Advanced Modeling and Autonomous Control of Parafoil–Payload Reentry Systems through Nonlinear 9-DOF Dynamics and Comparative Evaluation of PID and AI Controllers
