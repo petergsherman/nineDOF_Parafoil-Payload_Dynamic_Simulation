@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <iostream>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Helper function: matrix multiplication
 Matrix3x3 matmul(const Matrix3x3& A, const Matrix3x3& B) {
     Matrix3x3 result = {{{0}}};
@@ -36,6 +40,46 @@ Matrix3x3 transpose(const Matrix3x3& A) {
         }
     }
     return result;
+}
+
+// Helper function: matrix addition
+Matrix3x3 matadd(const Matrix3x3& A, const Matrix3x3& B) {
+    Matrix3x3 result;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            result[i][j] = A[i][j] + B[i][j];
+        }
+    }
+    return result;
+}
+
+// Helper function: matrix subtraction
+Matrix3x3 matsub(const Matrix3x3& A, const Matrix3x3& B) {
+    Matrix3x3 result;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            result[i][j] = A[i][j] - B[i][j];
+        }
+    }
+    return result;
+}
+
+// Helper function: scalar matrix multiplication
+Matrix3x3 matscale(const Matrix3x3& A, double s) {
+    Matrix3x3 result;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            result[i][j] = A[i][j] * s;
+        }
+    }
+    return result;
+}
+
+// Helper function: create identity matrix
+Matrix3x3 identity3x3() {
+    Matrix3x3 I = {{{0}}};
+    I[0][0] = I[1][1] = I[2][2] = 1.0;
+    return I;
 }
 
 // Helper function: vector norm

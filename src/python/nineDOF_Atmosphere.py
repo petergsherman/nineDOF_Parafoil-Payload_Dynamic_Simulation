@@ -248,7 +248,7 @@ class dynamicAtmosphere:
             gust_vec = factor * self._gust_vector
 
         # --- Total wind vector ---
-        total_wind = base_wind + self._bg_wind + gust_vec
+        total_wind = base_wind #+ self._bg_wind + gust_vec
 
         # Update public attributes
         self.VXWIND = float(total_wind[0])

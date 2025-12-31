@@ -1,7 +1,7 @@
 #nineDOF_Main.py
 import numpy as np
 from nineDOF_Plant import plant
-from nineDOF_Control import simpleHeadingController, testController, make_control_function
+from nineDOF_Control import LQRHeadingController, PIDHeadingController, simpleHeadingController, testController, make_control_function
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
 from nineDOF_Atmosphere import dynamicAtmosphere, staticAtmosphere
@@ -28,7 +28,7 @@ dt = 0.1        # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(testController())
+control = make_control_function(PIDHeadingController(targetLandingPoint))
 
 times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
     
