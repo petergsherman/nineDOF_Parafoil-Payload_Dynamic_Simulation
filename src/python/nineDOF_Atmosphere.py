@@ -12,13 +12,17 @@ class staticAtmosphere:
 
 class dynamicAtmosphere:
     """
-    Dryden wind turbulence model implementation based on MIL-F-8785C and MIL-HDBK-1797.
+    Dryden wind turbulence model implementation based on MIL-F-8785C and MIL-HDBK-1797,
+    with realistic layered wind structure that varies with altitude.
     
-    This model generates realistic atmospheric turbulence using forming filters driven
-    by white noise, with turbulence intensities that vary with altitude and wind speed.
+    This model generates:
+    - Layered mean wind profile with varying speed and direction (like real atmosphere)
+    - Realistic atmospheric turbulence using forming filters driven by white noise
+    - Turbulence intensities that vary with altitude and wind speed
     
-    The Dryden model uses rational transfer functions to shape white noise into
-    correlated turbulence with appropriate power spectral densities.
+    The wind layers represent realistic atmospheric structure where wind speed and
+    direction change with altitude due to different air masses, terrain effects,
+    and atmospheric stability.
     
     Usage:
         atm = dynamicAtmosphere(turbulence_intensity='moderate')
@@ -32,25 +36,33 @@ class dynamicAtmosphere:
     def __init__(
         self,
         turbulence_intensity: str = 'moderate',  # 'light', 'moderate', 'severe'
-        mean_wind_speed: float = 0.0,
-        mean_wind_direction: float = 0.0,  # degrees from north
-        altitude_ref: float = 0.0,  # reference altitude for wind profile
+        altitude_max: float = 10000.0,  # Maximum altitude for wind profile (m)
+        n_layers: int = 20,  # Number of distinct wind layers
         seed: int | None = None,
     ) -> None:
         """
-        Initialize Dryden turbulence model.
+        Initialize Dryden turbulence model with layered winds.
         
         Args:
             turbulence_intensity: 'light', 'moderate', or 'severe'
-            mean_wind_speed: Mean wind speed at reference altitude (m/s)
-            mean_wind_direction: Mean wind direction in degrees (0=north, 90=east)
-            altitude_ref: Reference altitude for mean wind (m)
+            altitude_max: Maximum altitude for wind layer generation (m)
+            n_layers: Number of wind layers to generate
             seed: Random seed for reproducibility
         """
         self.turbulence_intensity = turbulence_intensity
-        self.mean_wind_speed = mean_wind_speed
-        self.mean_wind_direction = np.deg2rad(mean_wind_direction)
-        self.altitude_ref = altitude_ref
+        self.altitude_max = altitude_max
+        self.n_layers = n_layers
+        
+        # Random generator (initialize before generating random surface conditions)
+        self.rng = np.random.default_rng(seed)
+        
+        # Generate random surface wind conditions
+        # Surface wind speed: typically 0-15 m/s (0-30 knots) for general conditions
+        # Can be higher in storms, but we'll use moderate range
+        self.surface_wind_speed = self.rng.uniform(2.0, 12.0)
+        
+        # Surface wind direction: completely random (0-360 degrees)
+        self.surface_wind_direction = self.rng.uniform(0.0, 360.0)
         
         # Public atmosphere state
         self.DEN: float = 1.22566
@@ -61,8 +73,8 @@ class dynamicAtmosphere:
         # Turbulence scale factor (can reduce if causing issues)
         self.turbulence_scale = 1.0  # Set to 0.0 to disable turbulence, 0.5 for half strength
         
-        # Random generator
-        self.rng = np.random.default_rng(seed)
+        # Generate layered wind profile (must come after random surface conditions)
+        self._generate_wind_layers()
         
         # Turbulence state variables (for forming filters)
         self._u_gust_state = np.zeros(2)  # longitudinal gust states
@@ -72,6 +84,86 @@ class dynamicAtmosphere:
         # Time tracking
         self._last_t: float | None = None
 
+    def _generate_wind_layers(self) -> None:
+        """
+        Generate realistic wind layers with varying speed and direction.
+        
+        Wind structure simulates:
+        - Surface layer (0-100m): Strong shear, direction changes due to friction
+        - Boundary layer (100-1000m): Moderate shear, backing/veering
+        - Free atmosphere (1000m+): More uniform, can have jet streams
+        """
+        # Altitude grid for layers
+        self.layer_altitudes = np.linspace(0, self.altitude_max, self.n_layers)
+        
+        # Initialize arrays
+        self.layer_speeds = np.zeros(self.n_layers)
+        self.layer_directions = np.zeros(self.n_layers)  # radians
+        
+        # Surface conditions
+        self.layer_speeds[0] = self.surface_wind_speed
+        self.layer_directions[0] = np.deg2rad(self.surface_wind_direction)
+        
+        # Generate wind profile with realistic transitions
+        for i in range(1, self.n_layers):
+            alt = self.layer_altitudes[i]
+            alt_prev = self.layer_altitudes[i-1]
+            delta_alt = alt - alt_prev
+            
+            # Wind speed evolution
+            if alt < 100:  # Surface layer - strong shear
+                # Power law with terrain roughness
+                alpha = 0.25  # rough terrain
+                speed_factor = (alt / max(alt_prev, 10.0)) ** alpha
+                self.layer_speeds[i] = self.layer_speeds[i-1] * speed_factor
+                # Add small random variation
+                self.layer_speeds[i] *= (1.0 + self.rng.normal(0, 0.1))
+                
+            elif alt < 1000:  # Boundary layer - moderate increase
+                # Logarithmic profile transitioning to free atmosphere
+                speed_increase = self.rng.normal(0.5, 0.3) * (delta_alt / 100.0)
+                self.layer_speeds[i] = self.layer_speeds[i-1] + speed_increase
+                
+            elif alt < 3000:  # Lower free atmosphere
+                # Can have moderate wind speeds, some variability
+                speed_change = self.rng.normal(0.2, 0.5) * (delta_alt / 500.0)
+                self.layer_speeds[i] = self.layer_speeds[i-1] + speed_change
+                
+            else:  # Upper levels - potential jet stream effects
+                # Higher variability, can increase significantly
+                if self.rng.random() < 0.3:  # 30% chance of jet stream influence
+                    speed_change = self.rng.normal(2.0, 1.5) * (delta_alt / 1000.0)
+                else:
+                    speed_change = self.rng.normal(0, 1.0) * (delta_alt / 1000.0)
+                self.layer_speeds[i] = self.layer_speeds[i-1] + speed_change
+            
+            # Clamp speeds to reasonable values
+            self.layer_speeds[i] = np.clip(self.layer_speeds[i], 0.5, 50.0)
+            
+            # Wind direction evolution (backing/veering with altitude)
+            if alt < 100:  # Surface layer - friction effects
+                # Direction can change significantly near surface
+                dir_change = self.rng.normal(0, np.deg2rad(20)) * (delta_alt / 50.0)
+                
+            elif alt < 1000:  # Boundary layer - thermal wind effects
+                # In Northern Hemisphere, typically veers (clockwise) with height
+                # Add randomness to simulate different atmospheric conditions
+                veer_rate = self.rng.normal(np.deg2rad(15), np.deg2rad(10))  # deg per 1000m
+                dir_change = veer_rate * (delta_alt / 1000.0)
+                
+            elif alt < 3000:  # Lower free atmosphere
+                # More variable, can back or veer
+                dir_change = self.rng.normal(0, np.deg2rad(25)) * (delta_alt / 1000.0)
+                
+            else:  # Upper levels
+                # Large-scale flow patterns, can shift significantly
+                dir_change = self.rng.normal(0, np.deg2rad(30)) * (delta_alt / 1000.0)
+            
+            self.layer_directions[i] = self.layer_directions[i-1] + dir_change
+            
+            # Keep direction in [0, 2π]
+            self.layer_directions[i] = self.layer_directions[i] % (2 * np.pi)
+
     def _get_turbulence_intensities(self, altitude: float) -> tuple[float, float, float]:
         """
         Get turbulence intensities (sigma_u, sigma_v, sigma_w) based on altitude
@@ -79,9 +171,6 @@ class dynamicAtmosphere:
         
         Returns: (sigma_u, sigma_v, sigma_w) in m/s
         """
-        # Low altitude model (h < 1000 ft = 304.8 m)
-        # Medium/high altitude model (h >= 1000 ft)
-        
         h_ft = altitude * 3.28084  # convert to feet
         
         if self.turbulence_intensity == 'light':
@@ -94,20 +183,17 @@ class dynamicAtmosphere:
             W20 = 15 * 0.514444  # default to light
         
         if altitude < 304.8:  # Low altitude (< 1000 ft)
-            # Use low altitude model
             sigma_w = 0.1 * W20
             sigma_u = sigma_w / (0.177 + 0.000823 * h_ft) ** 0.4
             sigma_v = sigma_u
         else:  # Medium/high altitude
-            # Linear decrease with altitude
-            h_m = altitude  # meters
             sigma_w = 0.1 * W20
             sigma_u = sigma_w
             sigma_v = sigma_w
             
             # Decrease intensity with altitude
-            if h_m > 1000:
-                scale = max(0.1, 1.0 - (h_m - 1000) / 10000)
+            if altitude > 1000:
+                scale = max(0.1, 1.0 - (altitude - 1000) / 10000)
                 sigma_u *= scale
                 sigma_v *= scale
                 sigma_w *= scale
@@ -122,10 +208,9 @@ class dynamicAtmosphere:
         Returns: (L_u, L_v, L_w) in meters
         """
         h_ft = altitude * 3.28084  # convert to feet
-        h_m = altitude  # meters
         
         if altitude < 304.8:  # Low altitude (< 1000 ft)
-            L_w = h_m  # scale with altitude
+            L_w = altitude  # scale with altitude
             L_u = L_w / (0.177 + 0.000823 * h_ft) ** 1.2
             L_v = L_u
         else:  # Medium/high altitude
@@ -153,7 +238,6 @@ class dynamicAtmosphere:
         K = sigma * np.sqrt(2 * L / (np.pi * V))
         
         # Continuous transfer function: K / (tau*s + 1)
-        # Discretize using Tustin (bilinear transform)
         num_c = [K]
         den_c = [tau, 1.0]
         
@@ -218,26 +302,25 @@ class dynamicAtmosphere:
 
     def _get_mean_wind(self, altitude: float) -> tuple[float, float, float]:
         """
-        Get mean wind components based on altitude using power law wind profile.
+        Get mean wind components at given altitude by interpolating through
+        the pre-generated wind layers.
         """
         if altitude < 0:
             altitude = 0
         
-        # Power law wind profile: V(h) = V_ref * (h/h_ref)^alpha
-        # Typical alpha = 0.14 for neutral stability
-        alpha = 0.14
-        h_ref = max(self.altitude_ref, 10.0)  # minimum 10m reference
+        # Clamp to valid range
+        alt = np.clip(altitude, self.layer_altitudes[0], self.layer_altitudes[-1])
         
-        if altitude < h_ref:
-            wind_speed = self.mean_wind_speed * (altitude / h_ref) ** alpha
-        else:
-            wind_speed = self.mean_wind_speed
+        # Interpolate wind speed and direction
+        wind_speed = np.interp(alt, self.layer_altitudes, self.layer_speeds)
+        wind_direction = np.interp(alt, self.layer_altitudes, self.layer_directions)
         
-        # Convert to components (wind direction is "from" direction)
+        # Convert to components
+        # Wind direction is "from" direction (meteorological convention)
         # North is 0°, East is 90°
         # Wind FROM north means blowing TO south (negative Y in NED)
-        wind_x = -wind_speed * np.sin(self.mean_wind_direction)  # East component
-        wind_y = -wind_speed * np.cos(self.mean_wind_direction)  # North component
+        wind_x = -wind_speed * np.sin(wind_direction)  # East component
+        wind_y = -wind_speed * np.cos(wind_direction)  # North component
         wind_z = 0.0  # No mean vertical wind
         
         return wind_x, wind_y, wind_z
@@ -251,23 +334,20 @@ class dynamicAtmosphere:
         alt_clamped = max(0.0, altitude)
         return rho0 * np.exp(-alt_clamped / H)
 
-    def update(self, t: float, altitude: float, airspeed: float | None = None) -> tuple[float, float, float, float]:
+    def update(self, t: float, altitude: float, airspeed: float) -> tuple[float, float, float, float]:
         """
-        Update the Dryden turbulence model.
+        Update the Dryden turbulence model with layered winds.
         
         Args:
             t: Current time (s)
             altitude: Geometric altitude above ground (m), positive upwards
-            airspeed: True airspeed magnitude (m/s). If None, uses a default of 15 m/s
+            airspeed: True airspeed magnitude (m/s)
         
         Returns:
             (density, wind_x, wind_y, wind_z)
         
         After calling, use self.DEN, self.VXWIND, self.VYWIND, self.VZWIND
         """
-        # Use default airspeed if not provided
-        if airspeed is None:
-            airspeed = 15.0  # Default typical parafoil airspeed
         # Clamp altitude
         alt = float(max(0.0, altitude))
         
@@ -317,7 +397,7 @@ class dynamicAtmosphere:
         v_gust = np.clip(v_gust, -max_gust, max_gust)
         w_gust = np.clip(w_gust, -max_gust, max_gust)
         
-        # Get mean wind
+        # Get mean wind from layered profile
         mean_x, mean_y, mean_z = self._get_mean_wind(alt)
         
         # Total wind = mean + turbulence
@@ -327,3 +407,14 @@ class dynamicAtmosphere:
         self.DEN = float(self._density_from_alt(alt))
         
         return self.DEN, self.VXWIND, self.VYWIND, self.VZWIND
+    
+    def get_wind_profile(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the wind profile for visualization/debugging.
+        
+        Returns:
+            (altitudes, speeds, directions_deg)
+        """
+        return (self.layer_altitudes.copy(), 
+                self.layer_speeds.copy(), 
+                np.rad2deg(self.layer_directions))
