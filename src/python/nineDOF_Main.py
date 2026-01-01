@@ -9,8 +9,10 @@ from nineDOF_Atmosphere import dynamicAtmosphere, staticAtmosphere
 
 #Create parameters from input file
 params = systemParameters()
-atm = staticAtmosphere()
-    
+atm = dynamicAtmosphere(turbulence_intensity="light",
+                        altitude_max=10000,
+                        n_layers=20) #seed=# to have reproducible wind profiles
+  
 #Create simulator
 sim = plant(params, atm)
     
@@ -28,9 +30,9 @@ dt = 0.1        # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(PIDHeadingController(targetLandingPoint))
+control = make_control_function(simpleHeadingController(targetLandingPoint))
 
-times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
+times, states = sim.run_simulation(state0, t_final, dt) #0.94 is maximum control defelction 
     
 print(f"Simulation complete: {len(times)} time steps")
 print(f"Final position: x={states[-1,0]:.2f}, y={states[-1,1]:.2f}, z={states[-1,2]:.2f}")
@@ -38,3 +40,6 @@ print(f"Final velocity: u={states[-1,9]:.2f}, v={states[-1,10]:.2f}, w={states[-
     
 #Simple visualization
 visualizeData.plot_trajectory(states)
+visualizeData.plot_Atmosphere(atm)
+
+#https://blog.stackademic.com/learn-to-build-a-neural-network-from-scratch-yes-really-cac4ca457efc

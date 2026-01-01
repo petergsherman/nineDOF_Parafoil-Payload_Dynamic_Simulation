@@ -43,3 +43,10 @@ class visualizeData:
         ax.legend()
         plt.grid(True)
         plt.show()
+    
+    def plot_Atmosphere(atm):
+        altitudes, speeds, directions = atm.get_wind_profile()
+        plt.plot(speeds, altitudes)
+        plt.xlabel('Wind Speed (m/s)')
+        plt.ylabel('Altitude (m)')
+        plt.show()

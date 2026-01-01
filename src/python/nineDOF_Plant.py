@@ -345,7 +345,9 @@ class plant:
             # Update atmosphere (assuming z is state[2], positive down)
             if hasattr(self.atmosphere, "update"):
                 altitude = -states[i - 1][2]
-                self.atmosphere.update(t, altitude)
+                print(altitude)
+                airspeed = np.linalg.norm([states[i-1][9:12]])
+                self.atmosphere.update(t, altitude, airspeed)
 
             #Get control inputs
             if control_func is not None:
