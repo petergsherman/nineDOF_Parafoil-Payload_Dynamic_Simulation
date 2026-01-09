@@ -306,11 +306,15 @@ class plant:
         b4 = C_MAp_P + S_rPAp_P @ C_FAp_P - C_MG_P - (S_rPMp_P @ S_wP_P + S_vMp_P @ self.I_H + S_wP_P @ (self.I_AI + self.I_P)) @ wP_P - (S_rPMp_P @ S_wP_P @ self.I_AM + S_wP_P @ self.I_H) @ vMp_P
         b = np.concatenate([b1, b2, b3, b4])
 
-        #Solving Linear Algebra Ax = b
+        # Solving Linear Algebra Ax = b
         try: 
-            X = np.linalg.solve(A,b)
+            X = np.linalg.solve(A, b)
+            # Check if solution is valid
+            if np.any(np.isnan(X)) or np.any(np.isinf(X)):
+                print("Warning: Invalid solution from linear solve")
+                X = np.zeros(12)
         except np.linalg.LinAlgError:
-            print("Singular Matrix in Dynamics Computation")
+            print(f"Singular Matrix at state: angles=[{phiP:.3f}, {thetaP:.3f}, {psiP:.3f}]")
             X = np.zeros(12)
         
         #Populating Statedot with Nonlinear Coupled Terms
@@ -342,12 +346,10 @@ class plant:
         for i in range(1, n_steps):
             t = times[i-1]
             
-            # Update atmosphere (assuming z is state[2], positive down)
+            # Update atmosphere 
             if hasattr(self.atmosphere, "update"):
                 altitude = -states[i - 1][2]
-                print(altitude)
-                airspeed = np.linalg.norm([states[i-1][9:12]])
-                self.atmosphere.update(t, altitude, airspeed)
+                self.atmosphere.update(t, altitude)
 
             #Get control inputs
             if control_func is not None:
@@ -360,14 +362,16 @@ class plant:
             
             #Integrate
             state = self.rk4_step(states[i-1], dt, deltaL, deltaR, incidence)
-            
+
             #Angle wrapping
-            for angle_idx in [4, 5, 7, 8]:  #theta and psi for both bodies
+            for angle_idx in [3, 4, 5, 6, 7, 8]:  #phi, theta, and psi for both bodies
                 while state[angle_idx] > np.pi:
+                    print(i, ">", state[angle_idx])
                     state[angle_idx] -= 2*np.pi
                 while state[angle_idx] < -np.pi:
+                    print(i, "<", state[angle_idx])
                     state[angle_idx] += 2*np.pi
-            
+
             times.append(t + dt)
             states.append(state.copy())
             

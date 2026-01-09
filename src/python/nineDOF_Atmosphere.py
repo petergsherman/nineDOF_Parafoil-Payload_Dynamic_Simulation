@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
-from scipy import signal
+
 
 @dataclass
 class staticAtmosphere:
@@ -12,56 +12,47 @@ class staticAtmosphere:
 
 class dynamicAtmosphere:
     """
-    Dryden wind turbulence model implementation based on MIL-F-8785C and MIL-HDBK-1797,
-    with realistic layered wind structure that varies with altitude.
+    Simplified dynamic atmosphere with layered winds and smooth sinusoidal gusts.
     
     This model generates:
-    - Layered mean wind profile with varying speed and direction (like real atmosphere)
-    - Realistic atmospheric turbulence using forming filters driven by white noise
-    - Turbulence intensities that vary with altitude and wind speed
-    
-    The wind layers represent realistic atmospheric structure where wind speed and
-    direction change with altitude due to different air masses, terrain effects,
-    and atmospheric stability.
+    - Layered mean wind profile with varying speed and direction by altitude
+    - Smooth sinusoidal wind gusts that build up and decay gradually
+    - Gusts have random direction (0-360°) and peak magnitude (1-15 m/s)
+    - Natural acceleration profiles that avoid numerical instability
     
     Usage:
-        atm = dynamicAtmosphere(turbulence_intensity='moderate')
+        atm = dynamicAtmosphere(gust_enabled=True)
         ...
         altitude = -state[2]   # if z is down
-        velocity = np.linalg.norm([vx, vy, vz])  # airspeed
-        atm.update(t, altitude, velocity)
+        atm.update(t, altitude)
         # then use atm.DEN, atm.VXWIND, atm.VYWIND, atm.VZWIND
     """
 
     def __init__(
         self,
-        turbulence_intensity: str = 'moderate',  # 'light', 'moderate', 'severe'
+        gust_enabled: bool = True,
         altitude_max: float = 10000.0,  # Maximum altitude for wind profile (m)
         n_layers: int = 20,  # Number of distinct wind layers
         seed: int | None = None,
     ) -> None:
         """
-        Initialize Dryden turbulence model with layered winds.
+        Initialize simplified atmosphere model with layered winds and sinusoidal gusts.
         
         Args:
-            turbulence_intensity: 'light', 'moderate', or 'severe'
+            gust_enabled: Enable random wind gusts
             altitude_max: Maximum altitude for wind layer generation (m)
             n_layers: Number of wind layers to generate
             seed: Random seed for reproducibility
         """
-        self.turbulence_intensity = turbulence_intensity
+        self.gust_enabled = gust_enabled
         self.altitude_max = altitude_max
         self.n_layers = n_layers
         
-        # Random generator (initialize before generating random surface conditions)
+        # Random generator
         self.rng = np.random.default_rng(seed)
         
         # Generate random surface wind conditions
-        # Surface wind speed: typically 0-15 m/s (0-30 knots) for general conditions
-        # Can be higher in storms, but we'll use moderate range
         self.surface_wind_speed = self.rng.uniform(2.0, 12.0)
-        
-        # Surface wind direction: completely random (0-360 degrees)
         self.surface_wind_direction = self.rng.uniform(0.0, 360.0)
         
         # Public atmosphere state
@@ -70,16 +61,20 @@ class dynamicAtmosphere:
         self.VYWIND: float = 0.0
         self.VZWIND: float = 0.0
         
-        # Turbulence scale factor (can reduce if causing issues)
-        self.turbulence_scale = 1.0  # Set to 0.0 to disable turbulence, 0.5 for half strength
-        
-        # Generate layered wind profile (must come after random surface conditions)
+        # Generate layered wind profile
         self._generate_wind_layers()
         
-        # Turbulence state variables (for forming filters)
-        self._u_gust_state = np.zeros(2)  # longitudinal gust states
-        self._v_gust_state = np.zeros(2)  # lateral gust states
-        self._w_gust_state = np.zeros(2)  # vertical gust states
+        # Gust state variables - sinusoidal approach
+        self._gust_active: bool = False
+        self._gust_start_time: float = 0.0
+        self._gust_duration: float = 0.0  # Total duration of gust (ramp up + hold + ramp down)
+        
+        self._gust_peak_x: float = 0.0
+        self._gust_peak_y: float = 0.0
+        self._gust_peak_z: float = 0.0
+        
+        # Next gust timing - start after 10 second settling period
+        self._next_gust_time: float = 10.0 + self.rng.uniform(10.0, 45.0) if gust_enabled else float('inf')
         
         # Time tracking
         self._last_t: float | None = None
@@ -164,142 +159,6 @@ class dynamicAtmosphere:
             # Keep direction in [0, 2π]
             self.layer_directions[i] = self.layer_directions[i] % (2 * np.pi)
 
-    def _get_turbulence_intensities(self, altitude: float) -> tuple[float, float, float]:
-        """
-        Get turbulence intensities (sigma_u, sigma_v, sigma_w) based on altitude
-        and specified intensity level according to MIL-F-8785C.
-        
-        Returns: (sigma_u, sigma_v, sigma_w) in m/s
-        """
-        h_ft = altitude * 3.28084  # convert to feet
-        
-        if self.turbulence_intensity == 'light':
-            W20 = 15 * 0.514444  # 15 knots to m/s
-        elif self.turbulence_intensity == 'moderate':
-            W20 = 30 * 0.514444  # 30 knots to m/s
-        elif self.turbulence_intensity == 'severe':
-            W20 = 45 * 0.514444  # 45 knots to m/s
-        else:
-            W20 = 15 * 0.514444  # default to light
-        
-        if altitude < 304.8:  # Low altitude (< 1000 ft)
-            sigma_w = 0.1 * W20
-            sigma_u = sigma_w / (0.177 + 0.000823 * h_ft) ** 0.4
-            sigma_v = sigma_u
-        else:  # Medium/high altitude
-            sigma_w = 0.1 * W20
-            sigma_u = sigma_w
-            sigma_v = sigma_w
-            
-            # Decrease intensity with altitude
-            if altitude > 1000:
-                scale = max(0.1, 1.0 - (altitude - 1000) / 10000)
-                sigma_u *= scale
-                sigma_v *= scale
-                sigma_w *= scale
-        
-        return sigma_u, sigma_v, sigma_w
-
-    def _get_scale_lengths(self, altitude: float) -> tuple[float, float, float]:
-        """
-        Get turbulence scale lengths (L_u, L_v, L_w) based on altitude
-        according to MIL-F-8785C.
-        
-        Returns: (L_u, L_v, L_w) in meters
-        """
-        h_ft = altitude * 3.28084  # convert to feet
-        
-        if altitude < 304.8:  # Low altitude (< 1000 ft)
-            L_w = altitude  # scale with altitude
-            L_u = L_w / (0.177 + 0.000823 * h_ft) ** 1.2
-            L_v = L_u
-        else:  # Medium/high altitude
-            L_u = 533.4  # meters (1750 ft)
-            L_v = L_u
-            L_w = 533.4  # meters
-        
-        # Ensure minimum scale lengths
-        L_u = max(L_u, 10.0)
-        L_v = max(L_v, 10.0)
-        L_w = max(L_w, 10.0)
-        
-        return L_u, L_v, L_w
-
-    def _dryden_transfer_function_u(self, L: float, sigma: float, V: float, dt: float):
-        """
-        Discretize the Dryden transfer function for longitudinal turbulence.
-        H_u(s) = sigma_u * sqrt(2*L_u/pi/V) / (1 + L_u*s/V)
-        """
-        if V < 1.0:
-            V = 1.0  # Avoid division by zero
-        
-        # Continuous time parameters
-        tau = L / V
-        K = sigma * np.sqrt(2 * L / (np.pi * V))
-        
-        # Continuous transfer function: K / (tau*s + 1)
-        num_c = [K]
-        den_c = [tau, 1.0]
-        
-        sys_c = signal.TransferFunction(num_c, den_c)
-        sys_d = sys_c.to_discrete(dt, method='bilinear')
-        
-        return sys_d.num.flatten(), sys_d.den.flatten()
-
-    def _dryden_transfer_function_vw(self, L: float, sigma: float, V: float, dt: float):
-        """
-        Discretize the Dryden transfer function for lateral/vertical turbulence.
-        H_v(s) = sigma_v * sqrt(L_v/pi/V) * (1 + sqrt(3)*L_v*s/V) / (1 + L_v*s/V)^2
-        """
-        if V < 1.0:
-            V = 1.0
-        
-        tau = L / V
-        K = sigma * np.sqrt(L / (np.pi * V))
-        
-        # Continuous: K * (1 + sqrt(3)*tau*s) / (tau*s + 1)^2
-        num_c = [K * np.sqrt(3) * tau, K]
-        den_c = [tau**2, 2*tau, 1.0]
-        
-        sys_c = signal.TransferFunction(num_c, den_c)
-        sys_d = sys_c.to_discrete(dt, method='bilinear')
-        
-        return sys_d.num.flatten(), sys_d.den.flatten()
-
-    def _filter_white_noise(self, white_noise: float, num: np.ndarray, den: np.ndarray, 
-                           state: np.ndarray) -> tuple[float, np.ndarray]:
-        """
-        Apply discrete filter to white noise input.
-        Returns: (output, new_state)
-        """
-        # Ensure coefficient arrays have same length
-        max_len = max(len(num), len(den))
-        num_padded = np.pad(num, (0, max_len - len(num)))
-        den_padded = np.pad(den, (0, max_len - len(den)))
-        
-        # Normalize by den[0]
-        num_norm = num_padded / den_padded[0]
-        den_norm = den_padded / den_padded[0]
-        
-        # Direct form II implementation
-        n_states = len(den_norm) - 1
-        if len(state) != n_states:
-            state = np.zeros(n_states)
-        
-        # Compute output
-        output = num_norm[0] * white_noise
-        if n_states > 0:
-            output += np.dot(num_norm[1:n_states+1], state[:n_states])
-        
-        # Update states
-        new_state = state.copy()
-        if n_states > 0:
-            new_state[0] = white_noise - np.dot(den_norm[1:n_states+1], state[:n_states])
-            if n_states > 1:
-                new_state[1:] = state[:-1]
-        
-        return output, new_state
-
     def _get_mean_wind(self, altitude: float) -> tuple[float, float, float]:
         """
         Get mean wind components at given altitude by interpolating through
@@ -334,14 +193,88 @@ class dynamicAtmosphere:
         alt_clamped = max(0.0, altitude)
         return rho0 * np.exp(-alt_clamped / H)
 
-    def update(self, t: float, altitude: float, airspeed: float) -> tuple[float, float, float, float]:
+    def _generate_new_gust(self) -> None:
         """
-        Update the Dryden turbulence model with layered winds.
+        Generate a new random gust with random direction and magnitude.
+        Sets the peak values that will be reached via sinusoidal buildup.
+        """
+        # Random gust magnitude between 1-15 m/s
+        gust_magnitude = self.rng.uniform(1.0, 10.0)
+        
+        # Random direction (0-360 degrees)
+        gust_direction = self.rng.uniform(0.0, 2 * np.pi)
+        
+        # Convert to components (horizontal plane)
+        self._gust_peak_x = gust_magnitude * np.cos(gust_direction)
+        self._gust_peak_y = gust_magnitude * np.sin(gust_direction)
+        
+        # Small vertical component (typically much smaller than horizontal)
+        self._gust_peak_z = self.rng.uniform(-2.0, 2.0)
+        
+        # Random gust duration between 3-8 seconds (time from start to finish)
+        self._gust_duration = self.rng.uniform(3.0, 8.0)
+
+    def _calculate_gust_component(self, t: float) -> tuple[float, float, float]:
+        """
+        Calculate current gust components using smooth sinusoidal profile.
+        
+        The gust follows a sine wave pattern:
+        - Starts at 0
+        - Smoothly ramps up to peak
+        - Smoothly ramps back down to 0
+        
+        This creates smooth accelerations that match real atmospheric behavior.
+        """
+        if not self._gust_active:
+            return 0.0, 0.0, 0.0
+        
+        # Time since gust started
+        elapsed = t - self._gust_start_time
+        
+        # Check if gust is complete
+        if elapsed >= self._gust_duration:
+            self._gust_active = False
+            return 0.0, 0.0, 0.0
+        
+        # Calculate sinusoidal profile (half sine wave from 0 to π)
+        # This gives smooth acceleration at start and deceleration at end
+        phase = (elapsed / self._gust_duration) * np.pi
+        amplitude = np.sin(phase)  # Ranges from 0 to 1 and back to 0
+        
+        # Apply amplitude to peak gust components
+        gust_x = self._gust_peak_x * amplitude
+        gust_y = self._gust_peak_y * amplitude
+        gust_z = self._gust_peak_z * amplitude
+        
+        return gust_x, gust_y, gust_z
+
+    def _update_gust(self, t: float) -> tuple[float, float, float]:
+        """
+        Update gust state and return current gust components.
+        """
+        if not self.gust_enabled:
+            return 0.0, 0.0, 0.0
+        
+        # Check if it's time to start a new gust
+        if not self._gust_active and t >= self._next_gust_time:
+            # Start new gust
+            self._generate_new_gust()
+            self._gust_start_time = t
+            self._gust_active = True
+            
+            # Schedule next gust (5-15 seconds after current gust completes)
+            self._next_gust_time = t + self._gust_duration + self.rng.uniform(5.0, 15.0)
+        
+        # Calculate and return current gust components
+        return self._calculate_gust_component(t)
+
+    def update(self, t: float, altitude: float) -> tuple[float, float, float, float]:
+        """
+        Update the atmosphere model with layered winds and smooth sinusoidal gusts.
         
         Args:
             t: Current time (s)
             altitude: Geometric altitude above ground (m), positive upwards
-            airspeed: True airspeed magnitude (m/s)
         
         Returns:
             (density, wind_x, wind_y, wind_z)
@@ -351,59 +284,23 @@ class dynamicAtmosphere:
         # Clamp altitude
         alt = float(max(0.0, altitude))
         
-        # Time step
+        # Time step (for reference, not used in sinusoidal approach)
         if self._last_t is None:
-            dt = 0.01  # Initial timestep
+            dt = 0.01
         else:
-            dt = max(1e-3, min(t - self._last_t, 1.0))  # Clamp dt for stability
+            dt = t - self._last_t
         self._last_t = t
-        
-        # Get turbulence parameters
-        sigma_u, sigma_v, sigma_w = self._get_turbulence_intensities(alt)
-        L_u, L_v, L_w = self._get_scale_lengths(alt)
-        
-        # Use airspeed for filter design (spatial frequency)
-        V = max(airspeed, 1.0)  # Minimum 1 m/s to avoid singularities
-        
-        # Generate white noise inputs
-        noise_u = self.rng.normal(0.0, 1.0)
-        noise_v = self.rng.normal(0.0, 1.0)
-        noise_w = self.rng.normal(0.0, 1.0)
-        
-        # Get discrete transfer functions
-        num_u, den_u = self._dryden_transfer_function_u(L_u, sigma_u, V, dt)
-        num_v, den_v = self._dryden_transfer_function_vw(L_v, sigma_v, V, dt)
-        num_w, den_w = self._dryden_transfer_function_vw(L_w, sigma_w, V, dt)
-        
-        # Filter noise through transfer functions
-        u_gust, self._u_gust_state = self._filter_white_noise(
-            noise_u, num_u, den_u, self._u_gust_state
-        )
-        v_gust, self._v_gust_state = self._filter_white_noise(
-            noise_v, num_v, den_v, self._v_gust_state
-        )
-        w_gust, self._w_gust_state = self._filter_white_noise(
-            noise_w, num_w, den_w, self._w_gust_state
-        )
-        
-        # Apply turbulence scale factor
-        u_gust *= self.turbulence_scale
-        v_gust *= self.turbulence_scale
-        w_gust *= self.turbulence_scale
-        
-        # Clamp turbulence to reasonable limits (prevent numerical issues)
-        max_gust = 3.0 * max(sigma_u, sigma_v, sigma_w)
-        u_gust = np.clip(u_gust, -max_gust, max_gust)
-        v_gust = np.clip(v_gust, -max_gust, max_gust)
-        w_gust = np.clip(w_gust, -max_gust, max_gust)
         
         # Get mean wind from layered profile
         mean_x, mean_y, mean_z = self._get_mean_wind(alt)
         
-        # Total wind = mean + turbulence
-        self.VXWIND = float(mean_x + u_gust)
-        self.VYWIND = float(mean_y + v_gust)
-        self.VZWIND = float(mean_z + w_gust)
+        # Get current gust components (smooth sinusoidal)
+        gust_x, gust_y, gust_z = self._update_gust(t)
+        
+        # Total wind = mean + gust
+        self.VXWIND = float(mean_x + gust_x)
+        self.VYWIND = float(mean_y + gust_y)
+        self.VZWIND = float(mean_z + gust_z)
         self.DEN = float(self._density_from_alt(alt))
         
         return self.DEN, self.VXWIND, self.VYWIND, self.VZWIND
@@ -418,3 +315,27 @@ class dynamicAtmosphere:
         return (self.layer_altitudes.copy(), 
                 self.layer_speeds.copy(), 
                 np.rad2deg(self.layer_directions))
+    
+    def get_current_gust_info(self) -> dict:
+        """
+        Get current gust information for debugging.
+        
+        Returns:
+            Dictionary with gust state information
+        """
+        if self._gust_active:
+            elapsed = self._last_t - self._gust_start_time if self._last_t else 0.0
+            phase = (elapsed / self._gust_duration) * np.pi if self._gust_duration > 0 else 0.0
+            amplitude = np.sin(phase)
+        else:
+            elapsed = 0.0
+            amplitude = 0.0
+        
+        return {
+            'active': self._gust_active,
+            'elapsed': elapsed,
+            'duration': self._gust_duration,
+            'amplitude': amplitude,
+            'peak_magnitude': np.sqrt(self._gust_peak_x**2 + self._gust_peak_y**2 + self._gust_peak_z**2),
+            'next_gust_in': max(0.0, self._next_gust_time - (self._last_t or 0.0))
+        }
