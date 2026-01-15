@@ -4,12 +4,15 @@ from nineDOF_Plant import plant
 from nineDOF_Control import LQRHeadingController, PIDHeadingController, simpleHeadingController, testController, make_control_function
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
-from nineDOF_Atmosphere import dynamicAtmosphere, staticAtmosphere
+from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphere
 
 
 #Create parameters from input file
 params = systemParameters()
-atm = dynamicAtmosphere(gust_enabled=True, altitude_max=2000, n_layers=10)
+atm = dynamicAtmosphere(
+    turbulence_mode=TurbulenceMode.DRYDEN,
+    turbulence_intensity="severe"
+)
   
 #Create simulator
 sim = plant(params, atm)
@@ -28,7 +31,7 @@ dt = 0.01          # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(PIDHeadingController(targetLandingPoint))
+control = make_control_function(simpleHeadingController(targetLandingPoint))
 
 times, states = sim.run_simulation(state0, t_final, dt) #0.94 is maximum control defelction 
     
@@ -38,6 +41,6 @@ print(f"Final velocity: u={states[-1,9]:.2f}, v={states[-1,10]:.2f}, w={states[-
     
 #Simple visualization
 visualizeData.plot_trajectory(states)
-#visualizeData.plot_Atmosphere(atm)
+visualizeData.plot_Atmosphere(atm)
 
 #https://blog.stackademic.com/learn-to-build-a-neural-network-from-scratch-yes-really-cac4ca457efc
