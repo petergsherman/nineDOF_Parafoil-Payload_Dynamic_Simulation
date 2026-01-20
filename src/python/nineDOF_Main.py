@@ -9,10 +9,7 @@ from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphe
 
 #Create parameters from input file
 params = systemParameters()
-atm = dynamicAtmosphere(
-    turbulence_mode=TurbulenceMode.DRYDEN,
-    turbulence_intensity="severe"
-)
+atm = dynamicAtmosphere(turbulence_mode=TurbulenceMode.DRYDEN, turbulence_intensity="moderate")
   
 #Create simulator
 sim = plant(params, atm)
@@ -27,20 +24,21 @@ state0[9:12] = [10.0, 0.0, -0.5]  # Forward velocity
 #Run simulation
 print("Running parafoil-payload simulation...")
 t_final = 1000.0  # seconds
-dt = 0.01          # seconds
+dt = 0.01         # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(simpleHeadingController(targetLandingPoint))
+control = make_control_function(LQRHeadingController(targetLandingPoint))
 
 times, states = sim.run_simulation(state0, t_final, dt) #0.94 is maximum control defelction 
-    
+
+
 print(f"Simulation complete: {len(times)} time steps")
 print(f"Final position: x={states[-1,0]:.2f}, y={states[-1,1]:.2f}, z={states[-1,2]:.2f}")
 print(f"Final velocity: u={states[-1,9]:.2f}, v={states[-1,10]:.2f}, w={states[-1,11]:.2f}")
     
 #Simple visualization
 visualizeData.plot_trajectory(states)
-visualizeData.plot_Atmosphere(atm)
+visualizeData.plot_atmosphere(atm)
 
 #https://blog.stackademic.com/learn-to-build-a-neural-network-from-scratch-yes-really-cac4ca457efc

@@ -85,6 +85,13 @@ class dynamicAtmosphere:
         # Time tracking
         self._last_t: float | None = None
 
+        # History storage for visualization
+        self.hist_t = []
+        self.hist_alt = []
+        self.hist_gust_speed = []
+        self.hist_gust_dir_deg = []
+
+
     def _generate_wind_layers(self) -> None:
         """
         Generate realistic wind layers with varying speed and direction.
@@ -243,11 +250,11 @@ class dynamicAtmosphere:
         """
         # Turbulence intensity parameters (σ values in m/s)
         if self.turbulence_intensity == "light":
-            self._turb_sigma_base = 0.5
+            self._turb_sigma_base = 1
         elif self.turbulence_intensity == "moderate":
-            self._turb_sigma_base = 1.5
+            self._turb_sigma_base = 3
         else:  # severe
-            self._turb_sigma_base = 3.0
+            self._turb_sigma_base = 5
         
         # Dryden filter states (for forming colored noise from white noise)
         self._dryden_state_u = 0.0  # Longitudinal (x) turbulence state
@@ -445,6 +452,18 @@ class dynamicAtmosphere:
         self.VYWIND = float(mean_y + turb_y)
         self.VZWIND = float(mean_z + turb_z)
         self.DEN = float(self._density_from_alt(alt))
+
+        # -----------------------------
+        # Gust history logging
+        # -----------------------------
+        gust_speed = np.sqrt(turb_x**2 + turb_y**2)
+        gust_dir_deg = np.degrees(np.arctan2(turb_y, turb_x))  # [-180, 180]
+
+        self.hist_t.append(t)
+        self.hist_alt.append(altitude)
+        self.hist_gust_speed.append(gust_speed)
+        self.hist_gust_dir_deg.append(gust_dir_deg)
+
         
         return self.DEN, self.VXWIND, self.VYWIND, self.VZWIND
     

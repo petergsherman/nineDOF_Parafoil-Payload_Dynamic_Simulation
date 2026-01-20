@@ -1,7 +1,5 @@
-#nineDOF_Visualization.py
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as ani
 
 class visualizeData:
     def plot_trajectory(history, title="Parafoil Trajectory"):
@@ -44,9 +42,80 @@ class visualizeData:
         plt.grid(True)
         plt.show()
     
-    def plot_Atmosphere(atm):
-        altitudes, speeds, directions = atm.get_wind_profile()
-        plt.plot(speeds, altitudes)
-        plt.xlabel('Wind Speed (m/s)')
-        plt.ylabel('Altitude (m)')
+    def plot_atmosphere(atm):
+        """
+        Two-subplot atmosphere visualization:
+
+        Top:
+            Wind speed vs altitude (layered mean wind profile)
+
+        Bottom:
+            Gust direction (deg, -180 to 180) vs time on left axis,
+            Gust speed (m/s) vs time on right axis.
+        """
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 10))
+
+        # ===============================
+        # TOP: Wind speed vs altitude
+        # ===============================
+        if hasattr(atm, "get_wind_profile"):
+            altitudes, speeds, _dirs_deg = atm.get_wind_profile()
+        else:
+            # Fallback if method not present
+            altitudes = np.array(atm.layer_altitudes, dtype=float)
+            speeds = np.array(atm.layer_speeds, dtype=float)
+
+        ax1.plot(speeds, altitudes)
+        ax1.set_xlabel("Wind Speed [m/s]")
+        ax1.set_ylabel("Altitude [m]")
+        ax1.set_title("Atmospheric Wind Layering")
+        ax1.grid(True)
+
+        # ===============================
+        # BOTTOM: Gust direction & speed vs time
+        # ===============================
+        if not (hasattr(atm, "hist_t") and hasattr(atm, "hist_gust_dir_deg") and hasattr(atm, "hist_gust_speed")):
+            ax2.text(0.5, 0.5,
+                    "No gust history found.\nAdd logging in dynamicAtmosphere.update().",
+                    ha="center", va="center", transform=ax2.transAxes)
+            ax2.set_axis_off()
+            plt.tight_layout()
+            plt.show()
+            return
+
+        t = np.array(atm.hist_t, dtype=float)
+        gust_dir = np.array(atm.hist_gust_dir_deg, dtype=float)
+        gust_speed = np.array(atm.hist_gust_speed, dtype=float)
+
+        ax2_dir = ax2
+        ax2_spd = ax2.twinx()
+
+        # Plot gust direction with color to emphasize bidirectionality
+        ax2_dir.plot(t, gust_dir, color='tab:blue', linewidth=1.5, label='Gust Direction')
+        
+        # Add a horizontal line at zero for reference
+        ax2_dir.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
+        
+        # Plot gust speed
+        ax2_spd.plot(t, gust_speed, color='tab:orange', linewidth=1.5, label='Gust Speed')
+
+        ax2_dir.set_xlabel("Time [s]")
+        ax2_dir.set_ylabel("Gust Direction [deg]", color='tab:blue')
+        ax2_dir.tick_params(axis='y', labelcolor='tab:blue')
+        
+        # Set symmetric limits around zero
+        ax2_dir.set_ylim([-200, 200])
+        ax2_dir.set_yticks(np.arange(-180, 181, 45))
+
+        ax2_spd.set_ylabel("Gust Speed [m/s]", color='tab:orange')
+        ax2_spd.tick_params(axis='y', labelcolor='tab:orange')
+        
+        # Ensure gust speed starts at 0
+        current_ylim = ax2_spd.get_ylim()
+        ax2_spd.set_ylim([0, max(current_ylim[1], gust_speed.max() * 1.1)])
+
+        ax2_dir.set_title("Gust Direction & Speed vs Time")
+        ax2_dir.grid(True, alpha=0.3)
+
+        plt.tight_layout()
         plt.show()
