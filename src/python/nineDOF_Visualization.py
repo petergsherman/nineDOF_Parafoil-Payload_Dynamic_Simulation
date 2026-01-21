@@ -50,7 +50,7 @@ class visualizeData:
             Wind speed vs altitude (layered mean wind profile)
 
         Bottom:
-            Gust direction (deg, -180 to 180) vs time on left axis,
+            Gust direction (deg, 0 to 360) vs time on left axis,
             Gust speed (m/s) vs time on right axis.
         """
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 10))
@@ -84,17 +84,28 @@ class visualizeData:
             return
 
         t = np.array(atm.hist_t, dtype=float)
-        gust_dir = np.array(atm.hist_gust_dir_deg, dtype=float)
+        gust_dir_raw = np.array(atm.hist_gust_dir_deg, dtype=float)
         gust_speed = np.array(atm.hist_gust_speed, dtype=float)
+
+        # Convert angles from [-180, 180] to [0, 360] if needed
+        # Then unwrap to prevent discontinuities
+        gust_dir = gust_dir_raw.copy()
+        
+        # First convert any negative angles to 0-360 range
+        gust_dir = np.where(gust_dir < 0, gust_dir + 360, gust_dir)
+        
+        # Unwrap the angles to prevent jumps (e.g., 359° -> 1° becomes 359° -> 361°)
+        gust_dir = np.degrees(np.unwrap(np.radians(gust_dir)))
+        
+        # Optionally, normalize back to 0-360 range for cleaner display
+        # Comment out the next line if you want to see the unwrapped continuous values
+        gust_dir = gust_dir % 360
 
         ax2_dir = ax2
         ax2_spd = ax2.twinx()
 
         # Plot gust direction with color to emphasize bidirectionality
         ax2_dir.plot(t, gust_dir, color='tab:blue', linewidth=1.5, label='Gust Direction')
-        
-        # Add a horizontal line at zero for reference
-        ax2_dir.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
         
         # Plot gust speed
         ax2_spd.plot(t, gust_speed, color='tab:orange', linewidth=1.5, label='Gust Speed')
@@ -103,9 +114,9 @@ class visualizeData:
         ax2_dir.set_ylabel("Gust Direction [deg]", color='tab:blue')
         ax2_dir.tick_params(axis='y', labelcolor='tab:blue')
         
-        # Set symmetric limits around zero
-        ax2_dir.set_ylim([-200, 200])
-        ax2_dir.set_yticks(np.arange(-180, 181, 45))
+        # Set limits to 0-360 range
+        ax2_dir.set_ylim([0, 360])
+        ax2_dir.set_yticks(np.arange(0, 361, 45))
 
         ax2_spd.set_ylabel("Gust Speed [m/s]", color='tab:orange')
         ax2_spd.tick_params(axis='y', labelcolor='tab:orange')

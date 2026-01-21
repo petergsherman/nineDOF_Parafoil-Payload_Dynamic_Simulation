@@ -38,7 +38,7 @@ print(f"Final position: x={states[-1,0]:.2f}, y={states[-1,1]:.2f}, z={states[-1
 print(f"Final velocity: u={states[-1,9]:.2f}, v={states[-1,10]:.2f}, w={states[-1,11]:.2f}")
     
 #Simple visualization
-visualizeData.plot_trajectory(states)
+#visualizeData.plot_trajectory(states)
 visualizeData.plot_atmosphere(atm)
 
 #https://blog.stackademic.com/learn-to-build-a-neural-network-from-scratch-yes-really-cac4ca457efc
