@@ -45,7 +45,7 @@ class PIDHeadingController:
     PID controller for parafoil heading control to guide system to target landing point.
     Uses heading error to compute brake control inputs (deltaL, deltaR).
     """
-    def __init__(self, targetLandingLocation, kp=0.5, ki=0.01, kd=0.2, max_control=0.94):
+    def __init__(self, targetLandingLocation, kp=0.2, ki=0.05, kd=0.3, max_control=0.94, dt=0.01):
         """
         Args:
             targetLandingLocation: Tuple (x, y) of target landing coordinates
@@ -53,25 +53,29 @@ class PIDHeadingController:
             ki: Integral gain
             kd: Derivative gain
             max_control: Maximum control deflection (0 to 0.94)
+            dt: Expected time step (for derivative calculation)
         """
         self.target = np.array(targetLandingLocation)
         self.kp = kp
         self.ki = ki
         self.kd = kd
         self.max_control = max_control
+        self.dt = dt
         
         # PID state variables
         self.integral_error = 0.0
         self.prev_error = 0.0
         self.prev_time = None
+        self.first_call = True
         
-    def computeControl(self, state):
+    def computeControl(self, state, current_time=None):
         """
         Compute control based on current state.
         
         Args:
             state: State vector [x, y, z, phi_p, theta_p, psi_p, ...]
                    where psi_p (state[5]) is the parafoil heading angle
+            current_time: Current simulation time (optional, uses dt if not provided)
         
         Returns:
             Tuple (deltaL, deltaR, incidence) - control inputs
@@ -84,9 +88,9 @@ class PIDHeadingController:
         to_target = self.target - current_pos
         distance_to_target = np.linalg.norm(to_target)
         
-        # If very close to target, no control needed
-        if distance_to_target < 10.0:
-            return (0.0, 0.9, 0.0)
+        # If very close to target, reduce control smoothly
+        if distance_to_target < 5.0:
+            return (0.0, 0.0, 0.0)
         
         # Desired heading angle to target
         desired_heading = np.arctan2(to_target[1], to_target[0])
@@ -95,21 +99,36 @@ class PIDHeadingController:
         heading_error = desired_heading - current_heading
         heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
         
+        # Determine time step
+        if current_time is not None and self.prev_time is not None:
+            dt = current_time - self.prev_time
+        else:
+            dt = self.dt
+        
         # PID calculations
         # Proportional term
         p_term = self.kp * heading_error
         
         # Integral term (with anti-windup)
-        self.integral_error += heading_error
-        # Anti-windup: limit integral to prevent excessive buildup
-        max_integral = 10.0
-        self.integral_error = np.clip(self.integral_error, -max_integral, max_integral)
+        if not self.first_call:
+            self.integral_error += heading_error * dt
+            # Anti-windup: limit integral to prevent excessive buildup
+            max_integral = 10.0
+            self.integral_error = np.clip(self.integral_error, -max_integral, max_integral)
         i_term = self.ki * self.integral_error
         
         # Derivative term
-        error_rate = heading_error - self.prev_error
-        d_term = self.kd * error_rate
+        if not self.first_call and dt > 0:
+            error_rate = (heading_error - self.prev_error) / dt
+            d_term = self.kd * error_rate
+        else:
+            d_term = 0.0
+        
+        # Update previous values
         self.prev_error = heading_error
+        if current_time is not None:
+            self.prev_time = current_time
+        self.first_call = False
         
         # Total control output
         control_output = p_term + i_term + d_term
@@ -134,7 +153,7 @@ class PIDHeadingController:
         self.integral_error = 0.0
         self.prev_error = 0.0
         self.prev_time = None
-
+        self.first_call = True
 
 class LQRHeadingController:
     """

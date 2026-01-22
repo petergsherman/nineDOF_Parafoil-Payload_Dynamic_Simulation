@@ -9,7 +9,8 @@ from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphe
 
 #Create parameters from input file
 params = systemParameters()
-atm = dynamicAtmosphere(turbulence_mode=TurbulenceMode.DRYDEN, turbulence_intensity="moderate")
+atm = staticAtmosphere()
+#atm = dynamicAtmosphere(turbulence_mode=TurbulenceMode.DRYDEN, turbulence_intensity="moderate")
   
 #Create simulator
 sim = plant(params, atm)
@@ -28,9 +29,9 @@ dt = 0.01         # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(LQRHeadingController(targetLandingPoint))
+control = make_control_function(PIDHeadingController(targetLandingPoint, 0.5, 0.5, 0.5))
 
-times, states = sim.run_simulation(state0, t_final, dt) #0.94 is maximum control defelction 
+times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
 
 
 print(f"Simulation complete: {len(times)} time steps")
@@ -38,7 +39,7 @@ print(f"Final position: x={states[-1,0]:.2f}, y={states[-1,1]:.2f}, z={states[-1
 print(f"Final velocity: u={states[-1,9]:.2f}, v={states[-1,10]:.2f}, w={states[-1,11]:.2f}")
     
 #Simple visualization
-#visualizeData.plot_trajectory(states)
-visualizeData.plot_atmosphere(atm)
+visualizeData.plot_trajectory(states)
+#visualizeData.plot_atmosphere(atm)
 
 #https://blog.stackademic.com/learn-to-build-a-neural-network-from-scratch-yes-really-cac4ca457efc
