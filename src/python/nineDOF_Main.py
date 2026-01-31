@@ -9,8 +9,8 @@ from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphe
 
 #Create parameters from input file
 params = systemParameters()
-atm = staticAtmosphere()
-#atm = dynamicAtmosphere(turbulence_mode=TurbulenceMode.DRYDEN, turbulence_intensity="moderate")
+#atm = staticAtmosphere()
+atm = dynamicAtmosphere(turbulence_mode=TurbulenceMode.DRYDEN, turbulence_intensity="moderate")
   
 #Create simulator
 sim = plant(params, atm)
@@ -29,7 +29,7 @@ dt = 0.01         # seconds
 targetLandingPoint = (1000.0, 1000.0) #X and Y of the targeted Landing Point
     
 #Creating Control Function
-control = make_control_function(PIDHeadingController(targetLandingPoint, 0.5, 0.5, 0.5))
+control = make_control_function(LQRHeadingController(targetLandingPoint))
 
 times, states = sim.run_simulation(state0, t_final, dt, control) #0.94 is maximum control defelction 
 

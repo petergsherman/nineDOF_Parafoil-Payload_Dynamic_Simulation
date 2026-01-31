@@ -45,7 +45,7 @@ class PIDHeadingController:
     PID controller for parafoil heading control to guide system to target landing point.
     Uses heading error to compute brake control inputs (deltaL, deltaR).
     """
-    def __init__(self, targetLandingLocation, kp=0.2, ki=0.05, kd=0.3, max_control=0.94, dt=0.01):
+    def __init__(self, targetLandingLocation, kp=0.0, ki=0.0, kd=0.0, max_control=0.94, dt=0.01):
         """
         Args:
             targetLandingLocation: Tuple (x, y) of target landing coordinates
@@ -254,8 +254,8 @@ class LQRHeadingController:
         distance_to_target = np.linalg.norm(to_target)
         
         # If very close to target, no control needed
-        if distance_to_target < 10.0:
-            return (0.0, 0.0, 0.0)
+        if distance_to_target < 50.0:
+            return (0.0, 0.9, 0.0)
         
         # Desired heading angle to target
         desired_heading = np.arctan2(to_target[1], to_target[0])
