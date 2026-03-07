@@ -140,7 +140,9 @@ class plant:
 
         #Velocity of the Aerodynamic Center
         vAp_P = vG_P + S_wP_P @ rGAp_P
-        vAp_P_wind = vAp_P - np.array([self.atmosphere.VXWIND,self.atmosphere.VYWIND, self.atmosphere.VZWIND])
+        wind_I = np.array([self.atmosphere.VXWIND,self.atmosphere.VYWIND, self.atmosphere.VZWIND])
+        wind_P = T_IP.T @ wind_I # rotate wind into parafoil body frame
+        vAp_P_wind = vAp_P + wind_P
         vAp_PI = T_PPI.T @ vAp_P_wind #Rotation by incidence frame
         vAp = np.linalg.norm(vAp_PI)
 
@@ -367,10 +369,8 @@ class plant:
             #Angle wrapping
             for angle_idx in [3, 4, 5, 6, 7, 8]:  #phi, theta, and psi for both bodies
                 while state[angle_idx] > np.pi:
-                    print(i, ">", state[angle_idx])
                     state[angle_idx] -= 2*np.pi
                 while state[angle_idx] < -np.pi:
-                    print(i, "<", state[angle_idx])
                     state[angle_idx] += 2*np.pi
 
             times.append(t + dt)

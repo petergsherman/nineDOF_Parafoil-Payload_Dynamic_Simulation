@@ -64,7 +64,7 @@ class dynamicAtmosphere:
         self.rng = np.random.default_rng(seed)
         
         # Generate random surface wind conditions
-        self.surface_wind_speed = self.rng.uniform(2.0, 12.0)
+        self.surface_wind_speed = self.rng.uniform(0.0, 4.0)
         self.surface_wind_direction = self.rng.uniform(0.0, 360.0)
         
         # Public atmosphere state

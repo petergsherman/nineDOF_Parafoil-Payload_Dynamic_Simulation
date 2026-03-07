@@ -18,9 +18,20 @@ class visualizeData:
         # Plot the line
         ax.plot(east, north, altitude, label='Trajectory', linewidth=2)
 
-        # Mark Start (Green Circle) and End (Red X)
-        ax.scatter(east[0], north[0], altitude[0], c='green', s=50, marker='o', label='Start')
-        ax.scatter(east[-1], north[-1], altitude[-1], c='red', s=100, marker='x', label='Impact/End')
+        # Mark Start (Green Dot)
+        ax.scatter(east[0], north[0], altitude[0], c='green', s=50, marker='.', label='Start')
+        
+        # Find ground impact point (where altitude <= 0)
+        ground_impact_idx = np.where(altitude <= 0)[0]
+        if len(ground_impact_idx) > 0:
+            # Use first point where altitude <= 0
+            impact_idx = ground_impact_idx[0]
+        else:
+            # If no point crosses zero, find the point closest to zero
+            impact_idx = np.argmin(np.abs(altitude))
+        
+        # Mark Ground Impact (Red X)
+        ax.scatter(east[impact_idx], north[impact_idx], altitude[impact_idx], c='red', s=100, marker='x', label='Ground Impact')
 
         # Labels
         ax.set_xlabel('East (m)')
