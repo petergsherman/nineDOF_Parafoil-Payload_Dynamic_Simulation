@@ -111,7 +111,11 @@ def run_episode(
     done = False
     total_reward = 0.0
     step = 0
-    trajectory = [] if save_trajectory else None
+    # Collect trajectory - seed with initial state so we see the spawn point
+    if save_trajectory:
+        trajectory = [env.get_state().copy()]
+    else:
+        trajectory = None
 
     # Track control effort
     actions = []
@@ -125,8 +129,7 @@ def run_episode(
         actions.append(action.copy())
 
         if save_trajectory:
-            state = env.get_state()
-            trajectory.append(state.copy())
+            trajectory.append(env.get_state().copy())
 
         done = terminated or truncated
 
@@ -275,7 +278,7 @@ def run_evaluation(
             model,
             env,
             deterministic   = True,
-            save_trajectory = args.save_trajectories,
+            save_trajectory = args.save_trajectories or args.plot,  # always collect if plotting
             seed            = args.seed + ep,
             fixed_start     = start_state,
         )
@@ -355,7 +358,7 @@ def main():
     if args.save_trajectories:
         traj_path = save_dir / f"{model_stem}_trajectories.npy"
         trajs = [np.array(r["trajectory"]) for r in results_no_wind if r["trajectory"]]
-        #np.save(str(traj_path), np.array(trajs, dtype=object))
+        np.save(str(traj_path), np.array(trajs, dtype=object))
         print(f"Trajectories saved to: {traj_path}")
 
     if args.plot:
@@ -435,7 +438,7 @@ def main():
             ax3d.view_init(elev=25, azim=-60)
             plt.tight_layout()
             plot_path_3d = save_dir / f"{model_stem}_3d_trajectories.png"
-            #plt.savefig(str(plot_path_3d), dpi=150)
+            plt.savefig(str(plot_path_3d), dpi=150)
             print(f"3D plot saved to: {plot_path_3d}")
 
             # ------------------------------------------------------------------
@@ -472,7 +475,7 @@ def main():
             fig2.suptitle(f"Parafoil PPO Evaluation: {model_stem}", fontsize=13)
             plt.tight_layout()
             plot_path_2d = save_dir / f"{model_stem}_landing_scatter.png"
-            #plt.savefig(str(plot_path_2d), dpi=150)
+            plt.savefig(str(plot_path_2d), dpi=150)
             print(f"Scatter plot saved to: {plot_path_2d}")
             plt.show()
 

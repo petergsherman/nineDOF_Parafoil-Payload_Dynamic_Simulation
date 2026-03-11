@@ -1,0 +1,18 @@
+{
+  "no_wind": {
+    "n_episodes": 10,
+    "success_radius_m": 50.0,
+    "n_success": 10,
+    "n_diverged": 0,
+    "success_rate": 1.0,
+    "diverge_rate": 0.0,
+    "mean_landing_error_m": 14.693657284321265,
+    "std_landing_error_m": 8.430158847287984,
+    "median_landing_error_m": 13.283102387463407,
+    "p90_landing_error_m": 22.801213084718313,
+    "mean_episode_reward": 676.5223888025627,
+    "std_episode_reward": 124.04694014588928,
+    "mean_episode_time_s": 86.30500000000725,
+    "mean_differential_brake": 1.4307034313678741
+  }
+}
