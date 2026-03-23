@@ -1,0 +1,19 @@
+{
+  "no_wind": {
+    "controller": "LQR",
+    "n_episodes": 20,
+    "success_radius_m": 50.0,
+    "n_success": 17,
+    "n_diverged": 0,
+    "success_rate": 0.85,
+    "diverge_rate": 0.0,
+    "mean_landing_error_m": 29.925337925610563,
+    "std_landing_error_m": 18.871781462275276,
+    "median_landing_error_m": 28.427853182478337,
+    "p90_landing_error_m": 56.251115956437985,
+    "mean_episode_reward": 870.4383623852566,
+    "std_episode_reward": 267.79969932983505,
+    "mean_episode_time_s": 92.46500000001045,
+    "mean_differential_brake": 0.5627635655647529
+  }
+}

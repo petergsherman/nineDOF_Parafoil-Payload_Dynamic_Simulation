@@ -1,18 +1,18 @@
 {
   "no_wind": {
-    "n_episodes": 10,
+    "n_episodes": 20,
     "success_radius_m": 50.0,
-    "n_success": 10,
+    "n_success": 19,
     "n_diverged": 0,
-    "success_rate": 1.0,
+    "success_rate": 0.95,
     "diverge_rate": 0.0,
-    "mean_landing_error_m": 14.693657284321265,
-    "std_landing_error_m": 8.430158847287984,
-    "median_landing_error_m": 13.283102387463407,
-    "p90_landing_error_m": 22.801213084718313,
-    "mean_episode_reward": 676.5223888025627,
-    "std_episode_reward": 124.04694014588928,
-    "mean_episode_time_s": 86.30500000000725,
-    "mean_differential_brake": 1.4307034313678741
+    "mean_landing_error_m": 24.500091860134827,
+    "std_landing_error_m": 16.016351707794083,
+    "median_landing_error_m": 21.472819974129454,
+    "p90_landing_error_m": 33.10289402079872,
+    "mean_episode_reward": 919.5426411840747,
+    "std_episode_reward": 290.29507433875096,
+    "mean_episode_time_s": 103.14450000001531,
+    "mean_differential_brake": 1.1183042660355569
   }
 }
