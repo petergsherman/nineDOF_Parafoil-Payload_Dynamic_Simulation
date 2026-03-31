@@ -1,0 +1,31 @@
+target_x: 0.0
+target_y: 0.0
+dt_action: 0.1
+dt_physics: 0.01
+max_episode_time: 1200.0
+atmosphere: dryden
+turbulence: moderate
+wind_x: 0.0
+wind_y: 0.0
+eval_atmosphere: None
+eval_wind_x: 0.0
+eval_wind_y: 0.0
+n_envs: 6
+total_steps: 100000
+policy_size: tiny
+seed: 42
+lr: 0.0003
+n_steps: 2048
+batch_size: 256
+gamma: 0.995
+run_name: dynamic_21
+log_dir: runs/
+checkpoint_dir: checkpoints/
+checkpoint_freq: 100000
+n_eval_episodes: 20
+
+run_name: dynamic_21
+policy_params: 10181
+training_time_min: 0.5
+train_atmosphere: dryden (moderate)
+eval_atmosphere: dryden (moderate)
