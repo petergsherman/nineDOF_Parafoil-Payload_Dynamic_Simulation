@@ -58,6 +58,7 @@ from stable_baselines3.common.callbacks import (
 # Policy network size presets
 # ============================================================================
 POLICY_SIZES = {
+    "micro":  dict(net_arch=[16,16]),
     "tiny":   dict(net_arch=[64, 64]),
     "small":  dict(net_arch=[128, 128]),
     "medium": dict(net_arch=[256, 256]),

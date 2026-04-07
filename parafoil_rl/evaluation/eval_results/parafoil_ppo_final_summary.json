@@ -2,17 +2,17 @@
   "primary": {
     "n_episodes": 100,
     "success_radius_m": 50.0,
-    "n_success": 85,
+    "n_success": 78,
     "n_diverged": 0,
-    "success_rate": 0.85,
+    "success_rate": 0.78,
     "diverge_rate": 0.0,
-    "mean_landing_error_m": 36.696614524704685,
-    "std_landing_error_m": 30.581994676865975,
-    "median_landing_error_m": 32.59232477293945,
-    "p90_landing_error_m": 52.94312326094279,
-    "mean_episode_reward": 889.2466365780504,
-    "std_episode_reward": 245.21526053644536,
-    "mean_episode_time_s": 158.7149999999983,
-    "mean_differential_brake": 0.39393087062984705
+    "mean_landing_error_m": 39.90005962442444,
+    "std_landing_error_m": 48.394801881441474,
+    "median_landing_error_m": 24.308159681130086,
+    "p90_landing_error_m": 63.12233969047701,
+    "mean_episode_reward": 904.7066806519516,
+    "std_episode_reward": 281.5336944274344,
+    "mean_episode_time_s": 94.23560000000704,
+    "mean_differential_brake": 1.1247962632775306
   }
 }

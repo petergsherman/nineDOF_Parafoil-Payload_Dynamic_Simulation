@@ -13,7 +13,6 @@ from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphe
 T_FINAL = 1000.0
 DT = 0.01
 TARGET_LANDING_POINT = np.array([-1000.0, 500.0], dtype=float)
-TERMINAL_MANEUVER_RADIUS_M = 200.0
 WIND_INTENSITY = "moderate"
 SAVE_FIGURE = True
 FIGURE_NAME = "heading_error_control_history.png"
@@ -78,21 +77,26 @@ def run_case(use_wind: bool):
         deltaL, deltaR, _ = controller.computeControl(state)
         control_history[i] = deltaR - deltaL
 
-    # Stop before the terminal maneuver starts.
-    stop_indices = np.where(distance_to_target <= TERMINAL_MANEUVER_RADIUS_M)[0]
-    if len(stop_indices) > 0:
-        stop_idx = stop_indices[0]
-    else:
-        stop_idx = len(times)
-
     return {
         "title": title,
-        "times": times[:stop_idx],
-        "heading_error": heading_error[:stop_idx],
-        "control_history": control_history[:stop_idx],
-        "final_distance_shown": float(distance_to_target[min(max(stop_idx - 1, 0), len(distance_to_target) - 1)]),
-        "full_final_distance": float(distance_to_target[-1]),
+        "times": times,
+        "heading_error": heading_error,
+        "control_history": control_history,
     }
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+def align_yaxis_zeros(ax_left, ax_right):
+    """Expand both y-axes symmetrically so their zeros are vertically aligned."""
+    def symmetric_limits(ax):
+        lo, hi = ax.get_ylim()
+        mag = max(abs(lo), abs(hi))
+        ax.set_ylim(-mag, mag)
+
+    symmetric_limits(ax_left)
+    symmetric_limits(ax_right)
 
 
 # -----------------------------------------------------------------------------
@@ -104,6 +108,8 @@ def main():
 
     fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=False)
 
+    ORANGE = "#E07B00"
+
     for ax, result in zip(axes, [no_wind, with_wind]):
         t = result["times"]
         heading_error_deg = np.degrees(result["heading_error"])
@@ -113,17 +119,20 @@ def main():
 
         ax.axhline(0.0, linestyle="--", linewidth=1.5)
         ax.plot(t, heading_error_deg, linewidth=2.0)
-        ax2.plot(t, control_hist, linewidth=1.8)
+        ax2.plot(t, control_hist, linewidth=1.8, color=ORANGE)
+
+        align_yaxis_zeros(ax, ax2)
 
         ax.set_ylabel("Heading error [deg]")
-        ax2.set_ylabel("Control history, dA = deltaR - deltaL [m]")
-        ax.set_title(
-            f"{result['title']} | stopped at ~{result['final_distance_shown']:.1f} m from target"
-        )
+        ax2.set_ylabel("Control history, dA", color=ORANGE)
+        ax2.tick_params(axis="y", colors=ORANGE)
+        ax2.spines["right"].set_color(ORANGE)
+
+        ax.set_title(result["title"])
         ax.grid(True, alpha=0.3)
 
     axes[-1].set_xlabel("Time [s]")
-    fig.suptitle("Heading-error convergence and control history before terminal maneuver", fontsize=14)
+    fig.suptitle("Heading-error convergence and control history", fontsize=14)
     fig.tight_layout()
 
     if SAVE_FIGURE:

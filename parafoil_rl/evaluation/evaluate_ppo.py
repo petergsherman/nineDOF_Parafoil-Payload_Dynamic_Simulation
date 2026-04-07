@@ -346,9 +346,10 @@ def run_evaluation(
 def plot_results(results_no_wind, args, model_stem, save_dir):
     try:
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D   # noqa: F401
         import matplotlib.cm as cm
         from matplotlib.lines import Line2D
+        from matplotlib.patches import Circle
+        from scipy.stats import gaussian_kde
 
         trajs_valid    = [r for r in results_no_wind if r["trajectory"] and not r["diverged"]]
         trajs_diverged = [r for r in results_no_wind if r["trajectory"] and r["diverged"]]
@@ -357,42 +358,7 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
             print("No valid trajectories to plot.")
             return
 
-        errors  = [r["landing_error"] for r in trajs_valid]
-        max_err = max(errors) if errors else 1.0
-        cmap    = cm.RdYlGn_r
-
-        # ── Figure 1: 3D trajectories ──────────────────────────────────────
-        fig = plt.figure(figsize=(14, 10))
-        ax3d = fig.add_subplot(111, projection="3d")
-
-        for r in trajs_valid:
-            traj  = np.array(r["trajectory"])
-            color = cmap(r["landing_error"] / max_err)
-            ax3d.plot(traj[:, 0], traj[:, 1], -traj[:, 2],
-                      color=color, alpha=0.5, linewidth=0.9)
-            ax3d.scatter(traj[0, 0], traj[0, 1], -traj[0, 2],
-                         color=color, s=40, marker="o", alpha=0.9,
-                         edgecolors="k", linewidths=0.5)
-            ax3d.scatter(traj[-1, 0], traj[-1, 1], 0,
-                         color=color, s=50, marker="v", alpha=0.9,
-                         edgecolors="k", linewidths=0.5)
-
-        for r in trajs_diverged:
-            traj = np.array(r["trajectory"])
-            ax3d.plot(traj[:, 0], traj[:, 1], -traj[:, 2],
-                      color="grey", alpha=0.3, linewidth=0.6, linestyle="--")
-
-        ax3d.scatter([args.target_x], [args.target_y], [0],
-                     c="red", s=300, marker="*", zorder=10, depthshade=False)
-        theta_c = np.linspace(0, 2 * np.pi, 120)
-        ax3d.plot(args.target_x + args.success_radius * np.cos(theta_c),
-                  args.target_y + args.success_radius * np.sin(theta_c),
-                  np.zeros(120), "r--", linewidth=1.5, alpha=0.7)
-
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, max_err))
-        sm.set_array([])
-        fig.colorbar(sm, ax=ax3d, shrink=0.5, pad=0.1, label="Landing Error (m)")
-
+        errors      = [r["landing_error"] for r in trajs_valid]
         n_success   = sum(e <= args.success_radius for e in errors)
         start_dists = [r.get("start_dist", 0.0) for r in trajs_valid]
 
@@ -403,64 +369,120 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
         else:
             atm_title = f"{args.atmosphere} ({args.turbulence})"
 
-        ax3d.set_xlabel("X (m)"); ax3d.set_ylabel("Y (m)"); ax3d.set_zlabel("Altitude (m)")
-        ax3d.set_title(
-            f"PPO 3D Trajectories  |  atm: {atm_title}\n"
-            f"n={len(trajs_valid)} landed  |  mean error={np.mean(errors):.1f}m  |  "
-            f"success={n_success}/{len(trajs_valid)}  |  "
-            f"avg start dist={np.mean(start_dists):.0f}m"
+        land_x    = np.array([np.array(r["trajectory"])[-1, 0] for r in trajs_valid])
+        land_y    = np.array([np.array(r["trajectory"])[-1, 1] for r in trajs_valid])
+        succ_mask = np.array(errors) <= args.success_radius
+
+        # ── Figure: two vertically stacked subplots ───────────────────────
+        fig, (ax_top, ax_bot) = plt.subplots(
+            2, 1, figsize=(8, 13),
+            gridspec_kw={"hspace": 0.35}
         )
-        ax3d.legend(handles=[
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="grey",
-                   markersize=8, markeredgecolor="k", label="Start"),
-            Line2D([0],[0], marker="v", color="w", markerfacecolor="grey",
-                   markersize=8, markeredgecolor="k", label="Landing"),
-            Line2D([0],[0], marker="*", color="w", markerfacecolor="red",
-                   markersize=12, label="Target"),
-        ], loc="upper left")
-        ax3d.view_init(elev=25, azim=-60)
-        plt.tight_layout()
-        p3d = save_dir / f"{model_stem}_3d_trajectories.png"
-        plt.savefig(str(p3d), dpi=150)
-        print(f"3D plot saved to: {p3d}")
 
-        # ── Figure 2: scatter + histogram ─────────────────────────────────
-        fig2, axes2 = plt.subplots(1, 2, figsize=(14, 6))
-        land_x = [np.array(r["trajectory"])[-1, 0] for r in trajs_valid]
-        land_y = [np.array(r["trajectory"])[-1, 1] for r in trajs_valid]
-        sc = axes2[0].scatter(land_x, land_y, c=errors, cmap="RdYlGn_r",
-                              s=60, alpha=0.8, vmin=0, vmax=max_err, zorder=3)
-        fig2.colorbar(sc, ax=axes2[0], label="Landing Error (m)")
-        axes2[0].scatter([args.target_x], [args.target_y],
-                         c="red", s=300, marker="*", zorder=5, label="Target")
-        axes2[0].add_patch(plt.Circle(
+        # ── TOP subplot: full top-down trajectories ───────────────────────
+        colors_traj = plt.cm.tab10.colors
+        for i, r in enumerate(trajs_valid):
+            traj  = np.array(r["trajectory"])
+            color = colors_traj[i % len(colors_traj)]
+            ax_top.plot(traj[:, 0], traj[:, 1], color=color,
+                        alpha=0.75, linewidth=1.0)
+
+        for r in trajs_diverged:
+            traj = np.array(r["trajectory"])
+            ax_top.plot(traj[:, 0], traj[:, 1],
+                        color="grey", alpha=0.35, linewidth=0.7, linestyle="--")
+
+        # All landing points
+        ax_top.scatter(land_x, land_y,
+                       color="tab:blue", s=25, zorder=4,
+                       label="All landing points")
+        # Successful landing points
+        if succ_mask.any():
+            ax_top.scatter(land_x[succ_mask], land_y[succ_mask],
+                           color="black", s=40, zorder=5,
+                           label=f"Successful landings (≤ {args.success_radius:.0f} m)")
+
+        # Target marker + success radius circle
+        ax_top.plot(args.target_x, args.target_y,
+                    "gx", markersize=12, markeredgewidth=2.5,
+                    zorder=6, label="Target")
+        ax_top.add_patch(Circle(
             (args.target_x, args.target_y), args.success_radius,
-            fill=False, color="red", linestyle="--",
-            label=f"{args.success_radius:.0f}m radius"))
-        axes2[0].set_xlabel("X (m)"); axes2[0].set_ylabel("Y (m)")
-        axes2[0].set_title("Landing Scatter"); axes2[0].set_aspect("equal")
-        axes2[0].legend(); axes2[0].grid(True, alpha=0.4)
+            fill=False, color="black", linestyle="--", linewidth=1.2, zorder=5))
+        # Add success radius to legend manually
+        from matplotlib.lines import Line2D as _L2D
+        top_handles, top_labels = ax_top.get_legend_handles_labels()
+        top_handles.append(_L2D([0], [0], color="black", linestyle="--",
+                                linewidth=1.2, label=f"{args.success_radius:.0f} m success radius"))
+        top_labels.append(f"{args.success_radius:.0f} m success radius")
 
-        axes2[1].hist(errors, bins=20, color="steelblue", edgecolor="white", alpha=0.85)
-        axes2[1].axvline(np.mean(errors), color="red", linewidth=2,
-                         label=f"Mean {np.mean(errors):.1f}m")
-        axes2[1].axvline(np.median(errors), color="orange", linewidth=2,
-                         linestyle="--", label=f"Median {np.median(errors):.1f}m")
-        axes2[1].axvline(args.success_radius, color="green", linewidth=2,
-                         linestyle=":", label=f"Success {args.success_radius:.0f}m")
-        axes2[1].set_xlabel("Landing Error (m)"); axes2[1].set_ylabel("Count")
-        axes2[1].set_title("Landing Error Distribution")
-        axes2[1].legend(); axes2[1].grid(True, alpha=0.4)
+        ax_top.set_xlabel("X Position (m)")
+        ax_top.set_ylabel("Y Position (m)")
+        ax_top.set_title(
+            f"Top-Down Trajectories\n"
+            f"PPO  |  {atm_title}  |  "
+            f"success {n_success}/{len(trajs_valid)}  "
+            f"({100*n_success/len(trajs_valid):.0f}%)"
+        )
+        ax_top.legend(top_handles, top_labels, loc="upper right", fontsize=8)
+        ax_top.grid(True, alpha=0.3)
+        ax_top.set_aspect("equal", adjustable="datalim")
 
-        fig2.suptitle(f"PPO Evaluation  |  {atm_title}", fontsize=13)
+        # ── BOTTOM subplot: zoomed KDE heatmap of successful landings ──────
+        zoom = args.success_radius * 2          # zoom radius = 2× success radius
+        ax_bot.set_facecolor("white")
+        ax_bot.set_xlim(args.target_x - zoom, args.target_x + zoom)
+        ax_bot.set_ylim(args.target_y - zoom, args.target_y + zoom)
+
+        # KDE density heatmap over the zoomed region
+        if succ_mask.sum() >= 3:
+            sx, sy = land_x[succ_mask], land_y[succ_mask]
+            xy     = np.vstack([sx, sy])
+            kde    = gaussian_kde(xy, bw_method="scott")
+            grid_n = 200
+            gx     = np.linspace(args.target_x - zoom, args.target_x + zoom, grid_n)
+            gy     = np.linspace(args.target_y - zoom, args.target_y + zoom, grid_n)
+            GX, GY = np.meshgrid(gx, gy)
+            Z      = kde(np.vstack([GX.ravel(), GY.ravel()])).reshape(GX.shape)
+            # Mask out near-zero density so background stays white
+            Z_plot = np.where(Z < Z.max() * 0.01, np.nan, Z)
+            ax_bot.contourf(GX, GY, Z_plot, levels=10, cmap="jet", alpha=0.70)
+            ax_bot.contour( GX, GY, Z_plot, levels=10, cmap="jet",
+                            linewidths=0.8, alpha=0.85)
+
+        # Successful landing scatter on top of heatmap
+        if succ_mask.any():
+            ax_bot.scatter(land_x[succ_mask], land_y[succ_mask],
+                           color="black", s=30, zorder=5,
+                           label="Successful landing points")
+
+        # Target + success-radius circle
+        ax_bot.plot(args.target_x, args.target_y,
+                    "bx", markersize=13, markeredgewidth=2.5,
+                    zorder=6, label="Target")
+        ax_bot.add_patch(Circle(
+            (args.target_x, args.target_y), args.success_radius,
+            fill=False, color="black", linestyle="--", linewidth=1.4, zorder=5))
+        bot_handles, bot_labels = ax_bot.get_legend_handles_labels()
+        bot_handles.append(_L2D([0], [0], color="black", linestyle="--",
+                                linewidth=1.4, label=f"{args.success_radius:.0f} m success radius"))
+        bot_labels.append(f"{args.success_radius:.0f} m success radius")
+
+        ax_bot.set_xlabel("X Position (m)")
+        ax_bot.set_ylabel("Y Position (m)")
+        ax_bot.set_title("Successful Landing Locations")
+        ax_bot.legend(bot_handles, bot_labels, loc="upper right", fontsize=8)
+        ax_bot.grid(True, alpha=0.3)
+        ax_bot.set_aspect("equal")
+
         plt.tight_layout()
-        p2d = save_dir / f"{model_stem}_landing_scatter.png"
-        plt.savefig(str(p2d), dpi=150)
-        print(f"Scatter plot saved to: {p2d}")
+        p_out = save_dir / f"{model_stem}_trajectories.png"
+        plt.savefig(str(p_out), dpi=150)
+        print(f"Plot saved to: {p_out}")
         plt.show()
 
-    except ImportError:
-        print("matplotlib not available - skipping plots")
+    except ImportError as e:
+        print(f"Plotting unavailable: {e}")
 
 
 # =============================================================================
