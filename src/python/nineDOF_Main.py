@@ -1,7 +1,7 @@
 #nineDOF_Main.py
 import numpy as np
 from nineDOF_Plant import plant
-from nineDOF_Control import LQRHeadingController, PIDHeadingController, simpleHeadingController, testController, make_control_function
+from python.nineDOF_Control import LQRHeadingController, PIDHeadingController, simpleHeadingController, testController, make_control_function
 from nineDOF_Parameters import systemParameters, atmosphereParameters
 from nineDOF_Visualization import visualizeData
 from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphere

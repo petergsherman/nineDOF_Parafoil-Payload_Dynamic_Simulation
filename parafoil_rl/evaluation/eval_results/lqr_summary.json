@@ -1,19 +1,19 @@
 {
-  "no_wind": {
+  "primary": {
     "controller": "LQR",
     "n_episodes": 20,
     "success_radius_m": 50.0,
-    "n_success": 17,
+    "n_success": 16,
     "n_diverged": 0,
-    "success_rate": 0.85,
+    "success_rate": 0.8,
     "diverge_rate": 0.0,
-    "mean_landing_error_m": 29.925337925610563,
-    "std_landing_error_m": 18.871781462275276,
-    "median_landing_error_m": 28.427853182478337,
-    "p90_landing_error_m": 56.251115956437985,
-    "mean_episode_reward": 870.4383623852566,
-    "std_episode_reward": 267.79969932983505,
-    "mean_episode_time_s": 92.46500000001045,
-    "mean_differential_brake": 0.5627635655647529
+    "mean_landing_error_m": 32.55010828223542,
+    "std_landing_error_m": 24.179818775563273,
+    "median_landing_error_m": 21.552700037076306,
+    "p90_landing_error_m": 65.94817010542964,
+    "mean_episode_reward": 856.5047165233269,
+    "std_episode_reward": 275.76390173393963,
+    "mean_episode_time_s": 104.13000000001637,
+    "mean_differential_brake": 0.8544169649520083
   }
 }

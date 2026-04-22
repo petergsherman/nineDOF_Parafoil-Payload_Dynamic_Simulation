@@ -373,60 +373,70 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
         land_y    = np.array([np.array(r["trajectory"])[-1, 1] for r in trajs_valid])
         succ_mask = np.array(errors) <= args.success_radius
 
-        # ── Figure: two vertically stacked subplots ───────────────────────
-        fig, (ax_top, ax_bot) = plt.subplots(
-            2, 1, figsize=(8, 13),
-            gridspec_kw={"hspace": 0.35}
-        )
+        # ── Figure: 3-D top + 2-D bottom ─────────────────────────────────
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-        # ── TOP subplot: full top-down trajectories ───────────────────────
+        fig = plt.figure(figsize=(8, 13))
+        ax_top = fig.add_subplot(2, 1, 1, projection="3d")
+        ax_bot = fig.add_axes([0.10, 0.04, 0.82, 0.42])   # [left,bot,w,h]
+
+        # ── TOP subplot: 3-D trajectories (X, Y, Altitude) ───────────────
         colors_traj = plt.cm.tab10.colors
         for i, r in enumerate(trajs_valid):
             traj  = np.array(r["trajectory"])
             color = colors_traj[i % len(colors_traj)]
-            ax_top.plot(traj[:, 0], traj[:, 1], color=color,
-                        alpha=0.75, linewidth=1.0)
+            # state[:,2] is -altitude (NED), so altitude = -state[:,2]
+            alt = -traj[:, 2]
+            ax_top.plot(traj[:, 0], traj[:, 1], alt,
+                        color=color, alpha=0.75, linewidth=1.0)
 
         for r in trajs_diverged:
             traj = np.array(r["trajectory"])
-            ax_top.plot(traj[:, 0], traj[:, 1],
+            alt  = -traj[:, 2]
+            ax_top.plot(traj[:, 0], traj[:, 1], alt,
                         color="grey", alpha=0.35, linewidth=0.7, linestyle="--")
 
-        # All landing points
-        ax_top.scatter(land_x, land_y,
-                       color="tab:blue", s=25, zorder=4,
+        # All landing points at z=0
+        ax_top.scatter(land_x, land_y, np.zeros_like(land_x),
+                       color="tab:blue", s=10, zorder=4,
                        label="All landing points")
         # Successful landing points
         if succ_mask.any():
             ax_top.scatter(land_x[succ_mask], land_y[succ_mask],
-                           color="black", s=40, zorder=5,
+                           np.zeros(succ_mask.sum()),
+                           color="black", s=10, zorder=5,
                            label=f"Successful landings (≤ {args.success_radius:.0f} m)")
 
-        # Target marker + success radius circle
-        ax_top.plot(args.target_x, args.target_y,
-                    "gx", markersize=12, markeredgewidth=2.5,
-                    zorder=6, label="Target")
-        ax_top.add_patch(Circle(
-            (args.target_x, args.target_y), args.success_radius,
-            fill=False, color="black", linestyle="--", linewidth=1.2, zorder=5))
-        # Add success radius to legend manually
-        from matplotlib.lines import Line2D as _L2D
-        top_handles, top_labels = ax_top.get_legend_handles_labels()
-        top_handles.append(_L2D([0], [0], color="black", linestyle="--",
-                                linewidth=1.2, label=f"{args.success_radius:.0f} m success radius"))
-        top_labels.append(f"{args.success_radius:.0f} m success radius")
+        # Target marker at ground level
+        ax_top.scatter([args.target_x], [args.target_y], [0],
+                       color="green", marker="x", s=80, linewidths=2.5,
+                       zorder=6, label="Target")
 
-        ax_top.set_xlabel("X Position (m)")
-        ax_top.set_ylabel("Y Position (m)")
+        # Success-radius circle drawn on the ground plane (z=0)
+        theta_circ = np.linspace(0, 2 * np.pi, 180)
+        ax_top.plot(
+            args.target_x + args.success_radius * np.cos(theta_circ),
+            args.target_y + args.success_radius * np.sin(theta_circ),
+            np.zeros(180),
+            color="black", linestyle="--", linewidth=1.2,
+            label=f"{args.success_radius:.0f} m success radius"
+        )
+
+        ax_top.set_xlabel("X (m)", labelpad=6)
+        ax_top.set_ylabel("Y (m)", labelpad=6)
+        ax_top.set_zlabel("Altitude (m)", labelpad=6)
         ax_top.set_title(
-            f"Top-Down Trajectories\n"
+            f"3-D Trajectories\n"
             f"PPO  |  {atm_title}  |  "
             f"success {n_success}/{len(trajs_valid)}  "
-            f"({100*n_success/len(trajs_valid):.0f}%)"
+            f"({100*n_success/len(trajs_valid):.0f}%)",
+            pad=10
         )
-        ax_top.legend(top_handles, top_labels, loc="upper right", fontsize=8)
-        ax_top.grid(True, alpha=0.3)
-        ax_top.set_aspect("equal", adjustable="datalim")
+        ax_top.legend(loc="upper left", fontsize=7, framealpha=0.7)
+        ax_top.view_init(elev=25, azim=-60)
+
+        # Line2D helper still needed for bottom subplot legend
+        from matplotlib.lines import Line2D as _L2D
 
         # ── BOTTOM subplot: zoomed KDE heatmap of successful landings ──────
         zoom = args.success_radius * 2          # zoom radius = 2× success radius
@@ -434,7 +444,7 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
         ax_bot.set_xlim(args.target_x - zoom, args.target_x + zoom)
         ax_bot.set_ylim(args.target_y - zoom, args.target_y + zoom)
 
-        # KDE density heatmap over the zoomed region
+        # KDE density heatmap over the zoomed region with 1σ/2σ/3σ contours
         if succ_mask.sum() >= 3:
             sx, sy = land_x[succ_mask], land_y[succ_mask]
             xy     = np.vstack([sx, sy])
@@ -444,21 +454,53 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
             gy     = np.linspace(args.target_y - zoom, args.target_y + zoom, grid_n)
             GX, GY = np.meshgrid(gx, gy)
             Z      = kde(np.vstack([GX.ravel(), GY.ravel()])).reshape(GX.shape)
-            # Mask out near-zero density so background stays white
-            Z_plot = np.where(Z < Z.max() * 0.01, np.nan, Z)
-            ax_bot.contourf(GX, GY, Z_plot, levels=10, cmap="jet", alpha=0.70)
-            ax_bot.contour( GX, GY, Z_plot, levels=10, cmap="jet",
-                            linewidths=0.8, alpha=0.85)
+
+            # Compute density thresholds corresponding to 1σ, 2σ, 3σ
+            # (fraction of probability mass enclosed: ~68.3%, ~95.4%, ~99.7%)
+            # Sort all density values descending and find the level that encloses
+            # the desired cumulative probability (integrated over the grid).
+            pixel_area = (gx[1] - gx[0]) * (gy[1] - gy[0])
+            Z_flat     = Z.ravel()
+            sort_idx   = np.argsort(Z_flat)[::-1]          # highest density first
+            cum_prob   = np.cumsum(Z_flat[sort_idx]) * pixel_area
+            cum_prob  /= cum_prob[-1]                       # normalise to [0, 1]
+
+            sigma_fracs  = [0.6827, 0.9545, 0.9973]        # 1σ, 2σ, 3σ
+            sigma_levels = []
+            for frac in sigma_fracs:
+                idx = np.searchsorted(cum_prob, frac)
+                idx = min(idx, len(Z_flat) - 1)
+                sigma_levels.append(Z_flat[sort_idx[idx]])
+            sigma_levels = sorted(sigma_levels)             # ascending for contourf
+
+            sigma_colors = ["#d73027", "#fc8d59", "#fee090"]   # red→orange→yellow
+            sigma_labels = ["3σ  (99.7%)", "2σ  (95.4%)", "1σ  (68.3%)"]
+
+            # Filled contours between sigma bands
+            ax_bot.contourf(GX, GY, Z, levels=sigma_levels + [Z.max()],
+                            colors=sigma_colors[::-1], alpha=0.65)
+            # Boundary contour lines
+            sigma_line_colors = ["#d73027", "#e08030", "#b8860b"]
+            cs = ax_bot.contour(GX, GY, Z, levels=sigma_levels,
+                                colors=sigma_line_colors,
+                                linewidths=1.4, alpha=0.95)
+
+            # Store sigma info for legend (added after get_legend_handles_labels below)
+            _sigma_legend_colors = sigma_colors[::-1]
+            _sigma_legend_labels = sigma_labels
+        else:
+            _sigma_legend_colors = []
+            _sigma_legend_labels = []
 
         # Successful landing scatter on top of heatmap
         if succ_mask.any():
             ax_bot.scatter(land_x[succ_mask], land_y[succ_mask],
-                           color="black", s=30, zorder=5,
+                           color="black", s=10, zorder=5,
                            label="Successful landing points")
 
         # Target + success-radius circle
         ax_bot.plot(args.target_x, args.target_y,
-                    "bx", markersize=13, markeredgewidth=2.5,
+                    "bx", markersize=6, markeredgewidth=2.5,
                     zorder=6, label="Target")
         ax_bot.add_patch(Circle(
             (args.target_x, args.target_y), args.success_radius,
@@ -467,6 +509,13 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
         bot_handles.append(_L2D([0], [0], color="black", linestyle="--",
                                 linewidth=1.4, label=f"{args.success_radius:.0f} m success radius"))
         bot_labels.append(f"{args.success_radius:.0f} m success radius")
+
+        # Sigma band legend entries
+        from matplotlib.patches import Patch
+        for color, lbl in zip(_sigma_legend_colors, _sigma_legend_labels):
+            bot_handles.append(Patch(facecolor=color, edgecolor="grey",
+                                     alpha=0.75, label=lbl))
+            bot_labels.append(lbl)
 
         ax_bot.set_xlabel("X Position (m)")
         ax_bot.set_ylabel("Y Position (m)")

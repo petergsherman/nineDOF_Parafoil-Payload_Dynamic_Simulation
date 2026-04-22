@@ -70,7 +70,7 @@ class AtmosphereBridge:
         """Re-create atmosphere with a new random seed (new wind profile)."""
         if self.mode == ATMO_STATIC:
             self._atm = None
-            return
+            return   # Caller must zero wind via cpp_env.set_wind(0,0,0) — see step()
 
         turbulence_map = {
             ATMO_DRYDEN: TurbulenceMode.DRYDEN,
@@ -92,7 +92,10 @@ class AtmosphereBridge:
         Call once per RL step (not per physics sub-step) for efficiency.
         """
         if self._atm is None:
-            return   # Static atmosphere - C++ env already has 0 wind
+            # Static atmosphere — explicitly zero wind every step so any wind
+            # that was set by the C++ env's own reset() is always overwritten.
+            cpp_env.set_wind(0.0, 0.0, 0.0)
+            return
 
         self._atm.update(t, altitude, airspeed)
         cpp_env.set_wind(
