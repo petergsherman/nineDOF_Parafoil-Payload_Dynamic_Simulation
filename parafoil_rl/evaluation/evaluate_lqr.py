@@ -54,7 +54,7 @@ except ImportError as e:
     )
 
 try:
-    from python.nineDOF_Control import LQRHeadingController
+    from parafoil_rl.evaluation.nineDOF_Control import LQRHeadingController
     from nineDOF_Plant import plant as PythonPlant
     from nineDOF_Parameters import systemParameters, atmosphereParameters
     _HAS_PYTHON_SIM = True
