@@ -360,6 +360,7 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
 
         errors      = [r["landing_error"] for r in trajs_valid]
         n_success   = sum(e <= args.success_radius for e in errors)
+        cep50       = float(np.median(errors))  # 50% of landings fall within this radius
         start_dists = [r.get("start_dist", 0.0) for r in trajs_valid]
 
         # Build atmosphere description for title
@@ -432,7 +433,12 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
             f"({100*n_success/len(trajs_valid):.0f}%)",
             pad=10
         )
-        ax_top.legend(loc="upper left", fontsize=7, framealpha=0.7)
+        top_handles, top_labels = ax_top.get_legend_handles_labels()
+        cep_label = f"CEP50: {cep50:.1f} m"
+        top_handles.append(Line2D([], [], linestyle="none", label=cep_label))
+        top_labels.append(cep_label)
+        ax_top.legend(top_handles, top_labels, loc="upper left",
+                      fontsize=7, framealpha=0.7)
         ax_top.view_init(elev=25, azim=-60)
 
         # Line2D helper still needed for bottom subplot legend
@@ -509,6 +515,10 @@ def plot_results(results_no_wind, args, model_stem, save_dir):
         bot_handles.append(_L2D([0], [0], color="black", linestyle="--",
                                 linewidth=1.4, label=f"{args.success_radius:.0f} m success radius"))
         bot_labels.append(f"{args.success_radius:.0f} m success radius")
+
+        # CEP50 is the median radial landing error across all valid landings.
+        bot_handles.append(_L2D([], [], linestyle="none", label=cep_label))
+        bot_labels.append(cep_label)
 
         # Sigma band legend entries
         from matplotlib.patches import Patch

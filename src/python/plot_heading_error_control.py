@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from nineDOF_Plant import plant
-from nineDOF_Control import LQRHeadingController, make_control_function
+from python.nineDOF_Control import LQRHeadingController, make_control_function
 from nineDOF_Parameters import systemParameters
 from nineDOF_Atmosphere import TurbulenceMode, dynamicAtmosphere, staticAtmosphere
 
